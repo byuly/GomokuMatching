@@ -17,7 +17,7 @@ Built on a scalable matchmaking backend with Kafka, Spring Boot, and WebSockets,
   - Runtime and memory efficiency
   - Code readability and style
 - The player with the higher score wins the round.
-- Matches can be 1v1 duels or 2v2 team battles, supported by real-time matchmaking and live score updates.
+- Matches can be 1v1 duels team battles, supported by real-time matchmaking and live score updates.
 
 ---
 
