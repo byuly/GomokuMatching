@@ -1,4 +1,4 @@
-package com.debugmatching.backend;
+package com.debugmatching;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
