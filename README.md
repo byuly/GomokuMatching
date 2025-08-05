@@ -48,12 +48,12 @@ Built on a scalable matchmaking backend with Kafka, Spring Boot, and WebSockets,
 | Component           | Technology                                   |
 | ------------------- | -------------------------------------------- |
 | Backend API         | Java Spring Boot                             |
-| Messaging & Streams | Apache Kafka                                 |
+| MMR-based Match Making Queue | Apache Kafka                                 |
 | Real-Time Updates   | Spring WebSockets (STOMP/SockJS)             |
 | Database            | PostgreSQL                                   |
 | Frontend UI         | Vite + React + TailwindCSS                   |
 | AI Opponent         | Machine Learning Models (PyTorch) |
-| Infrastructure      | Docker Compose, GitHub Actions (CI/CD)       |
+| Infrastructure      | Docker Compose      |
 
 ---
 
