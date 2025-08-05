@@ -1,4 +1,4 @@
-package com.debugmatching;
+package com.gomokumatching;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
