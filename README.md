@@ -58,7 +58,7 @@ Built on a scalable matchmaking backend with Kafka, Spring Boot, and WebSockets,
 ---
 
 🎮 Gameplay Flow
-Player Queuing: Players join matchmaking queues via API.
+Player Queuing: Players join matchmaking queues via REST API & Apache Kafka.
 
 Match Creation: Matchmaker pairs two players or assigns an AI opponent.
 
