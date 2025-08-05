@@ -73,7 +73,7 @@ Score Broadcast: Current game state and final results pushed live via WebSocket 
 Repeat: Players can start new matches or adjust AI difficulty levels.
 
 
-8. ## 🤖 Integrating PyTorch with Spring Boot for AI Opponent
+## 🤖 Integrating PyTorch with Spring Boot for AI Opponent
 
 While PyTorch primarily targets Python, you can integrate PyTorch-powered AI models into Java applications, including Spring Boot, using the **Deep Java Library (DJL)**. DJL acts as a bridge supporting multiple deep learning engines, including PyTorch.
 
