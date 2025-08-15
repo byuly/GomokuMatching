@@ -264,6 +264,9 @@ This approach avoids managing a separate Python service and simplifies deploymen
 Ideal for the AI Opponent service in Gomoku to evaluate board states and generate moves using ML models.
 
 ---
+🐳 Docker Development Setup
+Local development environment using Docker Compose with PostgreSQL 17, pgAdmin 4, and optional Kafka. Run docker-compose up -d postgres pgadmin for basic setup or docker-compose --profile kafka up -d for full stack. Access pgAdmin at http://localhost:5050 (admin@gomoku.dev/admin123) with auto-configured PostgreSQL connection (gomoku_user/gomoku_password). Data persists in Docker volumes.
+---
 
 🚀 Getting Started
 Prerequisites
