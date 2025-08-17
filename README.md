@@ -26,78 +26,94 @@ Built on a scalable matchmaking backend with Kafka, Spring Boot, and WebSockets,
 │                         GOMOKU HYBRID KAFKA ARCHITECTURE                        │
 └─────────────────────────────────────────────────────────────────────────────────┘
 
-┌─────────────────┐    WebSocket     ┌──────────────────────────────────────────┐
-│   React + Vite  │◄────────────────►│         Spring Boot Application         │
-│   Frontend UI   │     STOMP/SockJS │                                          │
-│                 │                  │  ┌─────────────────────────────────────┐ │
-│ • Game Board    │                  │  │         WebSocket Layer            │ │
-│ • Player Input  │                  │  │  • @MessageMapping controllers     │ │
-│ • Live Updates  │                  │  │  • SimpMessagingTemplate          │ │
-│ • Match Lobby   │                  │  │  • Session management              │ │
-└─────────────────┘                  │  └─────────────────────────────────────┘ │
-                                     │                   │                       │
-                                     │           ┌───────▼─────────┐             │
-┌─────────────────┐                  │           │  GAME SERVICES  │             │
-│   PostgreSQL    │◄─────────────────┤           │                 │             │
-│   Database      │  Final Results   │           │ • GameService   │             │
-│                 │                  │           │ • MatchmakingSvc│             │
-│ • Player Stats  │                  │           │ • AIOpponentSvc │             │
-│ • Game History  │                  │           │ • PlayerStatsSvc│             │
-│ • MMR Rankings  │                  │           └───────┬─────────┘             │
-│ • Match Results │                  │                   │                       │
-└─────────────────┘                  │           ┌───────▼─────────┐             │
-                                     │           │ KAFKA PRODUCERS │             │
-                                     │           │                 │             │
-                                     │           │ • GameEvents    │             │
-                                     │           │ • AIRequests    │             │
-                                     │           │ • MatchEvents   │             │
-                                     │           │ • Analytics     │             │
-                                     │           └─────────────────┘             │
-                                     └──────────────────┬────────────────────────┘
-                                                        ▼
-                                     ┌─────────────────────────────────────────────┐
-                                     │              APACHE KAFKA CLUSTER           │
-                                     │ ┌─────────────────────────────────────────┐ │
-                                     │ │             TOPIC: game-events          │ │
-                                     │ │ All game moves, state changes, results  │ │
-                                     │ └─────────────────────────────────────────┘ │
-                                     │ ┌─────────────────────────────────────────┐ │
-                                     │ │             TOPIC: ai-requests          │ │
-                                     │ │ AI move calculations and responses      │ │
-                                     │ └─────────────────────────────────────────┘ │
-                                     │ ┌─────────────────────────────────────────┐ │
-                                     │ │             TOPIC: match-events         │ │
-                                     │ │ Matchmaking, lobby, player connections  │ │
-                                     │ └─────────────────────────────────────────┘ │
-                                     │ ┌─────────────────────────────────────────┐ │
-                                     │ │             TOPIC: analytics-events     │ │
-                                     │ │ Game statistics, performance metrics    │ │
-                                     │ └─────────────────────────────────────────┘ │
-                                     └─────────────────────────────────────────────┘
-                                                         │
-                                                         ▼
-                                     ┌─────────────────────────────────────────────┐
-                                     │            KAFKA CONSUMER SERVICES          │
-                                     │                                             │
-                                     │ ┌─────────────────────────────────────────┐ │
-                                     │ │        GameEventsConsumer               │ │
-                                     │ │  • Event logging and replay             │ │
-                                     │ │  • Game history persistence             │ │
-                                     │ │  • Anti-cheat validation                │ │
-                                     │ └─────────────────────────────────────────┘ │
-                                     │ ┌─────────────────────────────────────────┐ │
-                                     │ │        AIRequestConsumer                │ │
-                                     │ │  • Background AI processing             │ │
-                                     │ │  • ML model training data collection   │ │
-                                     │ │  • AI performance analytics             │ │
-                                     │ └─────────────────────────────────────────┘ │
-                                     │ ┌─────────────────────────────────────────┐ │
-                                     │ │        AnalyticsConsumer                │ │
-                                     │ │  • Player statistics aggregation       │ │
-                                     │ │  • Leaderboard updates                  │ │
-                                     │ │  • Match outcome analysis               │ │
-                                     │ └─────────────────────────────────────────┘ │
-                                     └─────────────────────────────────────────────┘
+┌─────────────────┐                  ┌──────────────────────────────────────────┐
+│   React + Vite  │                  │         Spring Boot Application         │
+│   Frontend UI   │                  │                                          │
+│                 │     WebSocket    │  ┌─────────────────────────────────────┐ │
+│ • Game Board    │◄────────────────►│  │      WebSocket Layer (PvP)         │ │
+│ • Player Input  │   Player vs      │  │  • Real-time move broadcasting     │ │
+│ • Live Updates  │   Player moves   │  │  • Player session management       │ │
+│ • Match Lobby   │                  │  │  • Game state synchronization      │ │
+│                 │                  │  └─────────────────────────────────────┘ │
+│                 │     HTTP/REST    │                   │                       │
+│                 │◄────────────────►│           ┌───────▼─────────┐             │
+│                 │   Player vs AI   │           │  GAME SERVICES  │             │
+└─────────────────┘   moves & state  │           │                 │             │
+                                     │           │ • GameService   │             │
+┌─────────────────┐                  │           │ • PlayerStatsSvc│             │
+│   PostgreSQL    │◄─────────────────┤           └───────┬─────────┘             │
+│   Database      │  Final Results   │                   │                       │
+│                 │                  │           ┌───────▼─────────┐             │
+│ • Player Stats  │                  │           │ KAFKA PRODUCERS │             │
+│ • Game History  │                  │           │ (Shadow Paths)  │             │
+│ • MMR Rankings  │                  │           │ • GameEvents    │             │
+│ • Match Results │                  │           │ • Analytics     │             │
+└─────────────────┘                  │           │ • Move Logging  │             │
+                    ┌────────────────►│           │ • AI Analytics  │             │
+                    │                 │           └─────────────────┘             │
+┌───────────────────┴──┐               └──────────────────┬────────────────────────┘
+│    AI SERVICE        │                                  │
+│ (also in application)│                                  │
+│ • Move Calculations  │                                  │      ┌──────────────┐
+│ • Difficulty Levels  │                                  ▼      │ HTTP Request │
+│ • Game Tree Search   │                ┌─────────────────────────────────────────────┐
+│ • ML Model Inference │                │              APACHE KAFKA CLUSTER           │
+│ • Strategy Patterns  │                │ ┌─────────────────────────────────────────┐ │
+└──────────────────────┘                │ │             TOPIC: player-moves         │ │
+                                        │ │ Shadow logging of all game moves       │ │
+                                        │ └─────────────────────────────────────────┘ │
+┌─────────────────────────────────────┐ │ ┌─────────────────────────────────────────┐ │
+│       MATCHMAKING SERVICE           │ │ │           TOPIC: matchmaking            │ │
+│        (Kafka Consumer)             │ │ │ Queue management, player pairing       │ │
+│                                     │ │ └─────────────────────────────────────────┘ │
+│ • Queue Processing                  │ │ ┌─────────────────────────────────────────┐ │
+│ • Player Matching                   │◄┤ │             TOPIC: ai-analytics         │ │
+│ • Room Assignment                   │ │ │ AI performance metrics and decisions    │ │
+│ • MMR-based Pairing                 │ │ └─────────────────────────────────────────┘ │
+└─────────────────────────────────────┘ │ ┌─────────────────────────────────────────┐ │
+                                        │ │             TOPIC: analytics-events     │ │
+                                        │ │ Game statistics, performance metrics    │ │
+                                        │ └─────────────────────────────────────────┘ │
+                                        └─────────────────────────────────────────────┘
+                                                           │
+                                                           ▼
+                                       ┌─────────────────────────────────────────────┐
+                                       │            KAFKA CONSUMER SERVICES          │
+                                       │                                             │
+                                       │ ┌─────────────────────────────────────────┐ │
+                                       │ │        MoveLoggingConsumer              │ │
+                                       │ │  • Real-time move analytics             │ │
+                                       │ │  • Game replay data collection          │ │
+                                       │ │  • Anti-cheat pattern detection        │ │
+                                       │ └─────────────────────────────────────────┘ │
+                                       │ ┌─────────────────────────────────────────┐ │
+                                       │ │        MatchmakingConsumer              │ │
+                                       │ │  • Async player queue management        │ │
+                                       │ │  • Room creation and lifecycle          │ │
+                                       │ │  • Player connection routing            │ │
+                                       │ └─────────────────────────────────────────┘ │
+                                       │ ┌─────────────────────────────────────────┐ │
+                                       │ │        AIAnalyticsConsumer              │ │
+                                       │ │  • AI decision pattern analysis        │ │
+                                       │ │  • Model performance tracking          │ │
+                                       │ │  • AI training data collection         │ │
+                                       │ └─────────────────────────────────────────┘ │
+                                       │ ┌─────────────────────────────────────────┐ │
+                                       │ │        AnalyticsConsumer                │ │
+                                       │ │  • Player statistics aggregation       │ │
+                                       │ │  • Leaderboard updates                  │ │
+                                       │ │  • Match outcome analysis               │ │
+                                       │ └─────────────────────────────────────────┘ │
+                                       └─────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              COMMUNICATION PATTERNS                            │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ PLAYER vs PLAYER: WebSocket bidirectional real-time communication              │
+│ PLAYER vs AI: HTTP request/response for moves + game state                     │
+│ MATCHMAKING: Fully Kafka-driven async processing                               │
+│ ANALYTICS/LOGGING: Kafka shadow paths for all game events                      │
+└─────────────────────────────────────────────────────────────────────────────────┘
 
 ```
 --- 
