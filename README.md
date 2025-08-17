@@ -127,11 +127,18 @@ gomoku-backend/
 │   │       ├── AIRequestConsumer.java
 │   │       └── AnalyticsConsumer.java
 │   ├── model/
-│   │   ├── Game.java
-│   │   ├── Player.java
-│   │   ├── GameMove.java
-│   │   ├── AIRequest.java
-│   │   └── MatchmakingRequest.java
+│   │   ├── Player.java                // PLAYER
+│   │   ├── PlayerStats.java           // PLAYER_STATS
+│   │   ├── AIOpponent.java            // AI_OPPONENT
+│   │   ├── Game.java                  // GAME
+│   │   ├── GameMove.java              // GAME_MOVE
+│   │   ├── MatchmakingQueue.java      // MATCHMAKING_QUEUE
+│   │   ├── GameSession.java           // GAME_SESSION
+│   │   ├── KafkaEventLog.java         // KAFKA_EVENT_LOG
+│   │   ├── GameAnalytics.java         // GAME_ANALYTICS
+│   │   ├── Leaderboard.java           // LEADERBOARD
+│   │   ├── AIModelPerformance.java    // AI_MODEL_PERFORMANCE
+│   │   └── PlayerAIMatchup.java       // PLAYER_AI_MATCHUP
 │   ├── repository/
 │   │   ├── GameRepository.java
 │   │   ├── PlayerRepository.java
