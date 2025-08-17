@@ -40,54 +40,52 @@ Built on a scalable matchmaking backend with Kafka, Spring Boot, and WebSockets,
 │                 │   Player vs AI   │           │  GAME SERVICES  │             │
 └─────────────────┘   moves & state  │           │                 │             │
                                      │           │ • GameService   │             │
-┌─────────────────┐                  │           │ • PlayerStatsSvc│             │
-│   PostgreSQL    │◄─────────────────┤           └───────┬─────────┘             │
-│   Database      │  Final Results   │                   │                       │
-│                 │                  │           ┌───────▼─────────┐             │
-│ • Player Stats  │                  │           │ KAFKA PRODUCERS │             │
-│ • Game History  │                  │           │ (Shadow Paths)  │             │
-│ • MMR Rankings  │                  │           │ • GameEvents    │             │
-│ • Match Results │                  │           │ • Analytics     │             │
-└─────────────────┘                  │           │ • Move Logging  │             │
-                    ┌────────────────►│           │ • AI Analytics  │             │
+┌─────────────────┐                  │           │ • AIService     │             │
+│   PostgreSQL    │◄─────────────────┤           │ • PlayerStatsSvc│             │
+│   Database      │  Final Results   │           └───────┬─────────┘             │
+│                 │                  │                   │                       │
+│ • Player Stats  │                  │           ┌───────▼─────────┐             │
+│ • Game History  │                  │           │ KAFKA PRODUCERS │             │
+│ • MMR Rankings  │                  │           │ (Shadow Paths)  │             │
+│ • Match Results │                  │           │ • GameEvents    │             │
+└─────────────────┘                  │           │ • Analytics     │             │
+                    ┌────────────────►│           │ • Move Logging  │             │
+                    │                 │           │ • AI Analytics  │             │
                     │                 │           └─────────────────┘             │
-┌───────────────────┴──┐               └──────────────────┬────────────────────────┘
-│    AI SERVICE        │                                  │
-│ (also in application)│                                  │
-│ • Move Calculations  │                                  │      ┌──────────────┐
-│ • Difficulty Levels  │                                  ▼      │ HTTP Request │
-│ • Game Tree Search   │                ┌─────────────────────────────────────────────┐
-│ • ML Model Inference │                │              APACHE KAFKA CLUSTER           │
-│ • Strategy Patterns  │                │ ┌─────────────────────────────────────────┐ │
-└──────────────────────┘                │ │             TOPIC: player-moves         │ │
-                                        │ │ Shadow logging of all game moves       │ │
-                                        │ └─────────────────────────────────────────┘ │
-┌─────────────────────────────────────┐ │ ┌─────────────────────────────────────────┐ │
-│       MATCHMAKING SERVICE           │ │ │           TOPIC: matchmaking            │ │
-│        (Kafka Consumer)             │ │ │ Queue management, player pairing       │ │
-│                                     │ │ └─────────────────────────────────────────┘ │
-│ • Queue Processing                  │ │ ┌─────────────────────────────────────────┐ │
-│ • Player Matching                   │◄┤ │             TOPIC: ai-analytics         │ │
-│ • Room Assignment                   │ │ │ AI performance metrics and decisions    │ │
-│ • MMR-based Pairing                 │ │ └─────────────────────────────────────────┘ │
-└─────────────────────────────────────┘ │ ┌─────────────────────────────────────────┐ │
-                                        │ │             TOPIC: analytics-events     │ │
-                                        │ │ Game statistics, performance metrics    │ │
-                                        │ └─────────────────────────────────────────┘ │
-                                        └─────────────────────────────────────────────┘
-                                                           │
-                                                           ▼
-                                       ┌─────────────────────────────────────────────┐
-                                       │            KAFKA CONSUMER SERVICES          │
-                                       │                                             │
-                                       │ ┌─────────────────────────────────────────┐ │
-                                       │ │        MoveLoggingConsumer              │ │
-                                       │ │  • Real-time move analytics             │ │
-                                       │ │  • Game replay data collection          │ │
-                                       │ │  • Anti-cheat pattern detection        │ │
-                                       │ └─────────────────────────────────────────┘ │
-                                       │ ┌─────────────────────────────────────────┐ │
-                                       │ │        MatchmakingConsumer              │ │
+                    │                 └──────────────────┬────────────────────────┘
+                    │                                    ▼
+                    │                ┌─────────────────────────────────────────────┐
+                    │                │              APACHE KAFKA CLUSTER           │
+                    │                │ ┌─────────────────────────────────────────┐ │
+                    │                │ │             TOPIC: game-events          │ │
+                    │                │ │ Shadow logging of all game moves       │ │
+                    │                │ └─────────────────────────────────────────┘ │
+                    │                │ ┌─────────────────────────────────────────┐ │
+                    │                │ │           TOPIC: match-events           │ │
+                    │                │ │ Queue management, player pairing       │ │
+                    │                │ └─────────────────────────────────────────┘ │
+                    │                │ ┌─────────────────────────────────────────┐ │
+                    │                │ │             TOPIC: ai-analytics         │ │
+                    │                │ │ AI performance metrics and decisions    │ │
+                    │                │ └─────────────────────────────────────────┘ │
+                    │                │ ┌─────────────────────────────────────────┐ │
+                    │                │ │             TOPIC: analytics-events     │ │
+                    │                │ │ Game statistics, performance metrics    │ │
+                    │                │ └─────────────────────────────────────────┘ │
+                    │                └─────────────────────────────────────────────┘
+                    │                                    │
+                    │                                    ▼
+┌───────────────────┴──┐               ┌─────────────────────────────────────────────┐
+│  MATCHMAKING SERVICE │               │            KAFKA CONSUMER SERVICES          │
+│   (Kafka Consumer)   │               │                                             │
+│                      │               │ ┌─────────────────────────────────────────┐ │
+│ • Queue Processing   │               │ │        GameEventsConsumer               │ │
+│ • Player Matching    │               │ │  • Real-time move analytics             │ │
+│ • Room Assignment    │               │ │  • Game replay data collection          │ │
+│ • MMR-based Pairing  │◄──────────────┤ │  • Anti-cheat pattern detection        │ │
+│                      │  Async Match  │ └─────────────────────────────────────────┘ │
+└──────────────────────┘  Creation     │ ┌─────────────────────────────────────────┐ │
+                                       │ │        MatchEventsConsumer              │ │
                                        │ │  • Async player queue management        │ │
                                        │ │  • Room creation and lifecycle          │ │
                                        │ │  • Player connection routing            │ │
@@ -99,7 +97,7 @@ Built on a scalable matchmaking backend with Kafka, Spring Boot, and WebSockets,
                                        │ │  • AI training data collection         │ │
                                        │ └─────────────────────────────────────────┘ │
                                        │ ┌─────────────────────────────────────────┐ │
-                                       │ │        AnalyticsConsumer                │ │
+                                       │ │        AnalyticsEventsConsumer          │ │
                                        │ │  • Player statistics aggregation       │ │
                                        │ │  • Leaderboard updates                  │ │
                                        │ │  • Match outcome analysis               │ │
@@ -114,11 +112,12 @@ Built on a scalable matchmaking backend with Kafka, Spring Boot, and WebSockets,
 │ MATCHMAKING: Fully Kafka-driven async processing                               │
 │ ANALYTICS/LOGGING: Kafka shadow paths for all game events                      │
 └─────────────────────────────────────────────────────────────────────────────────┘
-
 ```
+
 --- 
-📁 Project Structure
-FOR TEMPLATE USE, UPDATE AS WE WILL NEED CHANGES: 
+
+## 📁 Project Structure
+
 ```plaintext
 gomoku-backend/
 ├── src/main/java/com/gomoku/
@@ -130,18 +129,19 @@ gomoku-backend/
 │   ├── service/
 │   │   ├── GameService.java                # Core game logic
 │   │   ├── MatchmakingService.java         # Player pairing
-│   │   ├── AIOpponentService.java          # AI move calculation
+│   │   ├── AIService.java                  # AI move calculation (internal)
 │   │   └── PlayerStatsService.java         # Statistics management
 │   ├── kafka/
 │   │   ├── producer/
 │   │   │   ├── GameEventsProducer.java
-│   │   │   ├── AIRequestProducer.java
 │   │   │   ├── MatchEventsProducer.java
-│   │   │   └── AnalyticsProducer.java
+│   │   │   ├── AIAnalyticsProducer.java
+│   │   │   └── AnalyticsEventsProducer.java
 │   │   └── consumer/
 │   │       ├── GameEventsConsumer.java
-│   │       ├── AIRequestConsumer.java
-│   │       └── AnalyticsConsumer.java
+│   │       ├── MatchEventsConsumer.java
+│   │       ├── AIAnalyticsConsumer.java
+│   │       └── AnalyticsEventsConsumer.java
 │   ├── model/
 │   │   ├── Player.java                // PLAYER
 │   │   ├── PlayerStats.java           // PLAYER_STATS
@@ -173,7 +173,6 @@ gomoku-backend/
 ├── pom.xml
 └── README.md
 ```
----
 
 ---
 
@@ -196,21 +195,16 @@ gomoku-backend/
 
 ### **1. Player Matchmaking Flow (Direct + Kafka)**
 
----
-
-### **1. Player Matchmaking Flow (Direct + Kafka)**
-
 1. Player clicks "Find Match" in React UI
 2. Frontend sends WebSocket message to MatchmakingController
 3. MatchmakingService processes request immediately:
    - Checks waiting queue for suitable opponent
    - If found: creates match directly, updates UI via WebSocket
    - If not found: adds to waiting queue
-4. Simultaneously: produces MatchEvent to 'match-events' topic for analytics
+4. Simultaneously: produces MatchEvent to `match-events` topic for analytics
 5. Players get immediate match confirmation or queue status
 
-
-### **2. Player Move Flow (WebSocket Primary + Kafka Async)**
+### **2. Player Move Flow (WebSocket Primary + Kafka Shadow)**
 
 1. Player clicks board position in React UI
 2. Frontend sends move via WebSocket to GameController
@@ -218,23 +212,20 @@ gomoku-backend/
    - Validates move and updates game state
    - Checks win conditions
    - Broadcasts updated board via WebSocket to both players
-4. Asynchronously: produces GameEvent to 'game-events' topic:
+4. Asynchronously: produces GameEvent to `game-events` topic:
    - Event logging for replay capability
    - Anti-cheat validation
    - Game history persistence
 
-
-
-
-### **3. AI Opponent Flow (Hybrid Processing)**
+### **3. AI Opponent Flow (Internal Processing + Kafka Analytics)**
 
 1. After player move, GameService detects AI turn
-2. AIOpponentService calculates move directly using PyTorch/DJL:
+2. AIService calculates move internally using PyTorch/DJL:
    - Loads appropriate difficulty model
    - Evaluates board state
    - Generates optimal move
-3. AI move applied immediately, broadcast via WebSocket
-4. Simultaneously: produces AIRequest to 'ai-requests' topic:
+3. AI move applied immediately, broadcast via WebSocket/HTTP response
+4. Simultaneously: produces AIAnalytics to `ai-analytics` topic:
    - ML training data collection
    - AI performance analytics
    - Model improvement insights
@@ -242,7 +233,7 @@ gomoku-backend/
 ### **4. Game Completion Flow (Immediate + Background)**
 
 1. Win condition detected by GameService
-2. Immediate actions via WebSocket:
+2. Immediate actions via WebSocket/HTTP:
    - Broadcast final results to players
    - Update basic player statistics
    - Display winner and game summary
@@ -251,6 +242,7 @@ gomoku-backend/
    - Complex statistics aggregation
    - Leaderboard updates
    - Match history persistence
+
 ---
 
 ## 🤖 Integrating PyTorch with Spring Boot for AI Opponent
@@ -280,51 +272,60 @@ Add the following DJL and PyTorch dependencies to your Spring Boot project to en
     <version>0.14.0</version>
 </dependency>
 ```
-Use DJL’s Java APIs to load pre-trained PyTorch models or export PyTorch models from Python and run inference inside your Spring Boot service.
+
+Use DJL's Java APIs to load pre-trained PyTorch models or export PyTorch models from Python and run inference inside your Spring Boot service.
 
 This approach avoids managing a separate Python service and simplifies deployment.
 
 Ideal for the AI Opponent service in Gomoku to evaluate board states and generate moves using ML models.
----
 
+---
 
 ## 🐳 Docker Development Setup
-Local development environment using Docker Compose with PostgreSQL 17, pgAdmin 4, and optional Kafka. Run docker-compose up -d postgres pgadmin for basic setup or docker-compose --profile kafka up -d for full stack. Access pgAdmin at http://localhost:5050 (admin@gomoku.dev/admin123) with auto-configured PostgreSQL connection (gomoku_user/gomoku_password). Data persists in Docker volumes.
+
+Local development environment using Docker Compose with PostgreSQL 17, pgAdmin 4, and optional Kafka. Run `docker-compose up -d postgres pgadmin` for basic setup or `docker-compose --profile kafka up -d` for full stack. Access pgAdmin at http://localhost:5050 (admin@gomoku.dev/admin123) with auto-configured PostgreSQL connection (gomoku_user/gomoku_password). Data persists in Docker volumes.
 
 ---
 
-🚀 Getting Started
-Prerequisites
+## 🚀 Getting Started
 
-Java 17+
-Node.js 18+
-Docker & Docker Compose
-Maven 3.8+
+### Prerequisites
 
-Local Development Setup
+- Java 17+
+- Node.js 18+
+- Docker & Docker Compose
+- Maven 3.8+
 
-Start infrastructure services:
-bashdocker-compose up -d kafka postgres
+### Local Development Setup
 
-Start Spring Boot Application:
-bash./mvnw spring-boot:run
+1. **Start infrastructure services:**
+```bash
+docker-compose up -d kafka postgres
+```
 
-Start Frontend:
-bashcd frontend
+2. **Start Spring Boot Application:**
+```bash
+./mvnw spring-boot:run
+```
+
+3. **Start Frontend:**
+```bash
+cd frontend
 npm install && npm run dev
+```
 
-Access Application:
+### Access Application
 
-Game UI: http://localhost:5173
-Backend API: http://localhost:8080
-Kafka UI (optional): http://localhost:8081
+- Game UI: http://localhost:5173
+- Backend API: http://localhost:8080
+- Kafka UI (optional): http://localhost:8081
 
+### Kafka Topics Creation
 
-
-Kafka Topics Creation
-bash# Create required topics
+```bash
+# Create required topics
 kafka-topics --create --topic game-events --bootstrap-server localhost:9092
-kafka-topics --create --topic ai-requests --bootstrap-server localhost:9092
 kafka-topics --create --topic match-events --bootstrap-server localhost:9092
+kafka-topics --create --topic ai-analytics --bootstrap-server localhost:9092
 kafka-topics --create --topic analytics-events --bootstrap-server localhost:9092
-
+```
