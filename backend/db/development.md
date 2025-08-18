@@ -170,6 +170,7 @@ We need to update this when we make changes to our models.
 ### `db/init/01_create_tables.sql`
 *You'll need to create this file with your specific database schema for the Gomoku game.*
 
+
 ## 🤝 Contributing
 
 This is a development environment template. Customize the database schema, Spring Boot configuration, and Docker settings to match your specific Gomoku game requirements.

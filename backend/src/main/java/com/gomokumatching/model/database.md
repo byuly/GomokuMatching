@@ -198,10 +198,10 @@ erDiagram
 ### Core Entities
 
 #### PLAYER
-Central user entity managing authentication and account information.
-- **Primary Key**: `player_id` (UUID)
+Stores user profile information, linked to an external authentication provider (Firebase).
+- **Primary Key**: `player_id` (String) - Stores the unique UID from Firebase Authentication.
 - **Unique Constraints**: `username`, `email`
-- **Key Features**: Account status tracking, login history
+- **Key Features**: Application-specific user status, profile data. Does not store credentials.
 
 #### AI_OPPONENT
 Represents AI opponents with different difficulty levels and ML model configurations.

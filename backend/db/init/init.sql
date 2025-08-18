@@ -1,14 +1,14 @@
 -- db/init/01_create_tables.sql
 -- This script runs automatically when PostgreSQL container starts for the first time
 
+-- Create uuid-ossp extension for uuid_generate_v4()
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
 -- Create the main database schema
 CREATE SCHEMA IF NOT EXISTS gomoku;
 
 -- Set the search path
 SET search_path TO gomoku, public;
-
--- Enable UUID extension
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Create enums
 CREATE TYPE account_status_enum AS ENUM ('ACTIVE', 'SUSPENDED', 'DELETED');
@@ -23,12 +23,11 @@ CREATE TYPE queue_status_enum AS ENUM ('WAITING', 'MATCHED', 'EXPIRED', 'CANCELL
 CREATE TYPE processing_status_enum AS ENUM ('PENDING', 'PROCESSED', 'FAILED');
 CREATE TYPE game_outcome_enum AS ENUM ('PLAYER1_WIN', 'PLAYER2_WIN', 'AI_WIN', 'DRAW', 'ABANDONED');
 
--- PLAYER table
+-- PLAYER table (profile data linked to Firebase Auth)
 CREATE TABLE player (
-                        player_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                        player_id VARCHAR(255) PRIMARY KEY, -- Firebase UID
                         username VARCHAR(50) NOT NULL UNIQUE,
                         email VARCHAR(255) NOT NULL UNIQUE,
-                        password_hash VARCHAR(255) NOT NULL,
                         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                         last_login TIMESTAMP WITH TIME ZONE,
                         is_active BOOLEAN DEFAULT true,
@@ -51,7 +50,7 @@ CREATE TABLE ai_opponent (
 -- PLAYER_STATS table
 CREATE TABLE player_stats (
                               stats_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                              player_id UUID NOT NULL REFERENCES player(player_id) ON DELETE CASCADE,
+                              player_id VARCHAR(255) NOT NULL REFERENCES player(player_id) ON DELETE CASCADE,
                               total_games INTEGER DEFAULT 0 CHECK (total_games >= 0),
                               wins INTEGER DEFAULT 0 CHECK (wins >= 0),
                               losses INTEGER DEFAULT 0 CHECK (losses >= 0),
@@ -69,11 +68,11 @@ CREATE TABLE game (
                       game_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
                       game_type game_type_enum NOT NULL,
                       game_status game_status_enum DEFAULT 'WAITING',
-                      player1_id UUID NOT NULL REFERENCES player(player_id) ON DELETE CASCADE,
-                      player2_id UUID REFERENCES player(player_id) ON DELETE CASCADE,
+                      player1_id VARCHAR(255) NOT NULL REFERENCES player(player_id) ON DELETE CASCADE,
+                      player2_id VARCHAR(255) REFERENCES player(player_id) ON DELETE CASCADE,
                       ai_opponent_id UUID REFERENCES ai_opponent(ai_id) ON DELETE SET NULL,
                       winner_type winner_type_enum DEFAULT 'NONE',
-                      winner_id UUID REFERENCES player(player_id) ON DELETE SET NULL,
+                      winner_id VARCHAR(255) REFERENCES player(player_id) ON DELETE SET NULL,
                       total_moves INTEGER DEFAULT 0 CHECK (total_moves >= 0),
                       started_at TIMESTAMP WITH TIME ZONE,
                       ended_at TIMESTAMP WITH TIME ZONE,
@@ -99,7 +98,7 @@ CREATE TABLE game_move (
                            game_id UUID NOT NULL REFERENCES game(game_id) ON DELETE CASCADE,
                            move_number INTEGER NOT NULL CHECK (move_number > 0),
                            player_type player_type_enum NOT NULL,
-                           player_id UUID REFERENCES player(player_id) ON DELETE CASCADE,
+                           player_id VARCHAR(255) REFERENCES player(player_id) ON DELETE CASCADE,
                            ai_opponent_id UUID REFERENCES ai_opponent(ai_id) ON DELETE CASCADE,
                            board_x INTEGER NOT NULL CHECK (board_x >= 0 AND board_x < 15),
                            board_y INTEGER NOT NULL CHECK (board_y >= 0 AND board_y < 15),
@@ -118,7 +117,7 @@ CREATE TABLE game_move (
 -- MATCHMAKING_QUEUE table
 CREATE TABLE matchmaking_queue (
                                    queue_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                                   player_id UUID NOT NULL REFERENCES player(player_id) ON DELETE CASCADE,
+                                   player_id VARCHAR(255) NOT NULL REFERENCES player(player_id) ON DELETE CASCADE,
                                    preferred_opponent preferred_opponent_enum DEFAULT 'ANY',
                                    ai_difficulty difficulty_level_enum,
                                    mmr_min INTEGER CHECK (mmr_min >= 0),
@@ -135,7 +134,7 @@ CREATE TABLE matchmaking_queue (
 CREATE TABLE game_session (
                               session_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
                               game_id UUID NOT NULL REFERENCES game(game_id) ON DELETE CASCADE,
-                              player_id UUID NOT NULL REFERENCES player(player_id) ON DELETE CASCADE,
+                              player_id VARCHAR(255) NOT NULL REFERENCES player(player_id) ON DELETE CASCADE,
                               websocket_session_id VARCHAR(255) NOT NULL,
                               connected_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                               disconnected_at TIMESTAMP WITH TIME ZONE,
@@ -149,7 +148,7 @@ CREATE TABLE kafka_event_log (
                                  topic_name VARCHAR(100) NOT NULL,
                                  event_type VARCHAR(100) NOT NULL,
                                  related_game_id UUID REFERENCES game(game_id) ON DELETE SET NULL,
-                                 related_player_id UUID REFERENCES player(player_id) ON DELETE SET NULL,
+                                 related_player_id VARCHAR(255) REFERENCES player(player_id) ON DELETE SET NULL,
                                  event_payload JSONB NOT NULL,
                                  event_timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                                  kafka_partition VARCHAR(10),
@@ -176,7 +175,7 @@ CREATE TABLE game_analytics (
 -- LEADERBOARD table
 CREATE TABLE leaderboard (
                              leaderboard_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                             player_id UUID NOT NULL REFERENCES player(player_id) ON DELETE CASCADE,
+                             player_id VARCHAR(255) NOT NULL REFERENCES player(player_id) ON DELETE CASCADE,
                              current_rank INTEGER NOT NULL CHECK (current_rank > 0),
                              previous_rank INTEGER CHECK (previous_rank > 0),
                              mmr_score INTEGER NOT NULL CHECK (mmr_score >= 0),
@@ -209,7 +208,7 @@ CREATE TABLE ai_model_performance (
 -- PLAYER_AI_MATCHUP table
 CREATE TABLE player_ai_matchup (
                                    matchup_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                                   player_id UUID NOT NULL REFERENCES player(player_id) ON DELETE CASCADE,
+                                   player_id VARCHAR(255) NOT NULL REFERENCES player(player_id) ON DELETE CASCADE,
                                    ai_opponent_id UUID NOT NULL REFERENCES ai_opponent(ai_id) ON DELETE CASCADE,
                                    games_played INTEGER DEFAULT 0 CHECK (games_played >= 0),
                                    player_wins INTEGER DEFAULT 0 CHECK (player_wins >= 0 AND player_wins <= games_played),
