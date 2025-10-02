@@ -323,15 +323,7 @@ CREATE INDEX idx_move_timestamp ON game_move(move_timestamp);
 
 ---
 
-## What's NOT in PostgreSQL
-
-### ❌ Removed Tables (Handled by Redis/Kafka)
-- `matchmaking_queue` → Redis sorted set (ZADD/ZPOPMIN)
-- `game_session` → Redis cached sessions
-- `kafka_event_log` → Kafka IS the event log
-- `leaderboard` → Feature not implemented yet
-
-### ⏸️ Deferred Tables (Future Analytics)
+### Future analytics
 - `game_analytics` - Post-game analysis
 - `ai_model_performance` - AI tracking
 - `player_ai_matchup` - Player vs AI stats
