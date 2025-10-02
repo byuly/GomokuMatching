@@ -1,40 +1,76 @@
 package com.gomokumatching.controller;
 
+import com.gomokumatching.model.dto.PlayerProfileDTO;
+import com.gomokumatching.model.dto.UpdateUsernameRequest;
+import com.gomokumatching.security.CustomUserDetails;
 import com.gomokumatching.service.PlayerService;
-import com.google.firebase.auth.FirebaseToken;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.UUID;
 
 /**
- * Controller for handling user profile operations.
+ * REST controller for user profile operations.
+ *
+ * Endpoints:
+ * - GET /api/profiles/me - Get current user's profile
+ * - PUT /api/profiles/username - Update username
+ *
+ * All endpoints require authentication (JWT token).
  */
 @RestController
 @RequestMapping("/api/profiles")
 @RequiredArgsConstructor
 public class ProfileController {
 
+    private static final Logger logger = LoggerFactory.getLogger(ProfileController.class);
+
     private final PlayerService playerService;
 
     /**
-     * Endpoint for syncing a Firebase user with a local database profile.
+     * Get authenticated user's profile.
      *
-     * How it works:
-     * 1. This endpoint should be called by the frontend once, immediately after a user's first successful login.
-     * 2. The request must include a valid Firebase ID token, which is verified by the FirebaseFilter.
-     * 3. The `Authentication` object, injected by Spring Security, contains the verified FirebaseToken.
-     * 4. The `playerService` uses the token to find an existing player or create a new one.
-     *
-     * @param authentication The authenticated user principal, containing the FirebaseToken.
-     * @return A response indicating success or failure.
+     * @param authentication Spring Security authentication object
+     * @return User profile DTO
      */
-    @PostMapping("/sync")
-    public ResponseEntity<String> syncUserProfile(Authentication authentication) {
-        FirebaseToken decodedToken = (FirebaseToken) authentication.getCredentials();
-        playerService.syncPlayer(decodedToken);
-        return ResponseEntity.ok("Profile synced for user: " + decodedToken.getUid());
+    @GetMapping("/me")
+    public ResponseEntity<PlayerProfileDTO> getCurrentUserProfile(Authentication authentication) {
+        CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
+        UUID userId = userDetails.getId();
+
+        logger.debug("Fetching profile for user ID: {}", userId);
+
+        PlayerProfileDTO profile = playerService.getPlayerProfile(userId);
+
+        return ResponseEntity.ok(profile);
+    }
+
+    /**
+     * Update authenticated user's username.
+     *
+     * @param authentication Spring Security authentication object
+     * @param request Request containing new username
+     * @return Success message
+     */
+    @PutMapping("/username")
+    public ResponseEntity<String> updateUsername(
+            Authentication authentication,
+            @Valid @RequestBody UpdateUsernameRequest request
+    ) {
+        CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
+        UUID userId = userDetails.getId();
+
+        logger.info("Username update request for user ID: {}", userId);
+
+        playerService.updateUsername(userId, request.getUsername());
+
+        logger.info("Username updated successfully for user ID: {}", userId);
+
+        return ResponseEntity.ok("Username updated successfully");
     }
 }
