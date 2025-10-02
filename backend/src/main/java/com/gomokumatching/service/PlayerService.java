@@ -1,16 +1,36 @@
 package com.gomokumatching.service;
 
 import com.gomokumatching.model.Player;
-import com.google.firebase.auth.FirebaseToken;
+import com.gomokumatching.model.dto.PlayerProfileDTO;
+
+import java.util.UUID;
 
 /**
  * Service interface for player-related operations.
  */
 public interface PlayerService {
+
     /**
-     * Syncs a Firebase user with the local database. If the user doesn't exist, it creates a new profile.
-     * @param decodedToken The verified Firebase ID token.
-     * @return The existing or newly created Player profile.
+     * Get player by UUID.
+     *
+     * @param playerId Player's UUID
+     * @return Player entity
      */
-    Player syncPlayer(FirebaseToken decodedToken);
+    Player getPlayerById(UUID playerId);
+
+    /**
+     * Get player profile DTO by UUID.
+     *
+     * @param playerId Player's UUID
+     * @return Player profile DTO
+     */
+    PlayerProfileDTO getPlayerProfile(UUID playerId);
+
+    /**
+     * Update player's username.
+     *
+     * @param playerId Player's UUID
+     * @param username New username
+     */
+    void updateUsername(UUID playerId, String username);
 }
