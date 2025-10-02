@@ -1,4 +1,4 @@
-# Gomoku Database Schema (Minimal - 5 Core Tables)
+# Gomoku Database Schema 
 
 ## Overview
 Minimal PostgreSQL schema for Gomoku supporting real-time gameplay with Redis/Kafka hybrid architecture. PostgreSQL stores **final persistence** only - active games live in Redis, events stream through Kafka.
