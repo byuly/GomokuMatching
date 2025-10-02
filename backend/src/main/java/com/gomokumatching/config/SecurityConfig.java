@@ -1,58 +1,118 @@
 package com.gomokumatching.config;
 
-import com.gomokumatching.security.FirebaseFilter;
+import com.gomokumatching.security.JwtAuthenticationFilter;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
- * Configures the application's security settings, including the security filter chain.
+ * Production-grade Spring Security configuration for JWT authentication.
+ *
+ * Security Features:
+ * - Stateless JWT authentication
+ * - BCrypt password encoding (work factor 12)
+ * - Public endpoints for registration and login
+ * - Protected endpoints requiring authentication
+ * - Custom JWT filter for token validation
+ * - Method-level security support
  */
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity(securedEnabled = true, jsr250Enabled = true)
+@RequiredArgsConstructor
 public class SecurityConfig {
 
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final UserDetailsService userDetailsService;
+
     /**
-     * Defines the security filter chain that applies to all HTTP requests.
+     * Configure HTTP security filter chain.
      *
-     * How it works:
-     * 1. CSRF (Cross-Site Request Forgery) is disabled, as it's not needed for a stateless API
-     *    that uses token-based authentication.
-     * 2. Session management is set to STATELESS, meaning the server does not create or maintain sessions.
-     *    Every request must be independently authenticated, typically with a token.
-     * 3. It defines authorization rules: endpoints under "/api/public/**" are permitted for everyone,
-     *    while all other endpoints under "/api/**" require authentication.
-     * 4. It adds the custom FirebaseFilter before the standard UsernamePasswordAuthenticationFilter.
-     *    This ensures that the Firebase ID token is verified for every incoming request before
-     *    the request reaches the controller.
-     *
-     * @param http The HttpSecurity object to configure.
-     * @param firebaseFilter The custom filter for verifying Firebase ID tokens.
-     * @return The configured SecurityFilterChain.
-     * @throws Exception if an error occurs during configuration.
+     * @param http HttpSecurity to configure
+     * @return Configured SecurityFilterChain
+     * @throws Exception if configuration fails
      */
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http, FirebaseFilter firebaseFilter) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            // Disable CSRF for stateless API
-            .csrf(csrf -> csrf.disable())
+                // Disable CSRF for stateless API
+                .csrf(csrf -> csrf.disable())
 
-            // Set session management to stateless
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // Set session management to stateless (no server-side sessions)
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                )
 
-            // Define authorization rules
-            .authorizeHttpRequests(authz -> authz
-                .requestMatchers("/api/public/**", "/api/profiles/sync").permitAll() // Public endpoints
-                .anyRequest().authenticated() // All other endpoints require authentication
-            )
+                // Configure authorization rules
+                .authorizeHttpRequests(authz -> authz
+                        // Public endpoints - no authentication required
+                        .requestMatchers(
+                                "/api/auth/register",
+                                "/api/auth/login",
+                                "/api/auth/refresh",
+                                "/actuator/health",
+                                "/error"
+                        ).permitAll()
 
-            // Add the custom Firebase filter to the chain
-            .addFilterBefore(firebaseFilter, UsernamePasswordAuthenticationFilter.class);
+                        // WebSocket endpoints (will be authenticated via WebSocket handshake)
+                        .requestMatchers("/ws/**").permitAll()
+
+                        // All other endpoints require authentication
+                        .anyRequest().authenticated()
+                )
+
+                // Add JWT filter before standard authentication filter
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    /**
+     * Password encoder using BCrypt with work factor 12.
+     * Work factor 12 provides strong security while maintaining acceptable performance.
+     *
+     * @return BCryptPasswordEncoder
+     */
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder(12);
+    }
+
+    /**
+     * Authentication provider using DAO (database) authentication.
+     *
+     * @return DaoAuthenticationProvider
+     */
+    @Bean
+    public DaoAuthenticationProvider authenticationProvider() {
+        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
+        authProvider.setUserDetailsService(userDetailsService);
+        authProvider.setPasswordEncoder(passwordEncoder());
+        return authProvider;
+    }
+
+    /**
+     * Authentication manager for authenticating users.
+     * Used by AuthService for login.
+     *
+     * @param config Authentication configuration
+     * @return AuthenticationManager
+     * @throws Exception if configuration fails
+     */
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+        return config.getAuthenticationManager();
     }
 }
