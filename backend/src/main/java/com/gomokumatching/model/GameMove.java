@@ -37,7 +37,7 @@ public class GameMove {
     private int moveNumber;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "player_type", nullable = false, columnDefinition = "player_type_enum")
+    @Column(name = "player_type", nullable = false)
     private PlayerTypeEnum playerType;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -59,7 +59,7 @@ public class GameMove {
     private int boardY;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "stone_color", nullable = false, columnDefinition = "stone_color_enum")
+    @Column(name = "stone_color", nullable = false)
     private StoneColorEnum stoneColor;
 
     @CreationTimestamp

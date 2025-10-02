@@ -26,11 +26,11 @@ public class Game {
     private UUID gameId;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "game_type", nullable = false, columnDefinition = "game_type_enum")
+    @Column(name = "game_type", nullable = false)
     private GameTypeEnum gameType;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "game_status", columnDefinition = "game_status_enum")
+    @Column(name = "game_status")
     private GameStatusEnum gameStatus = GameStatusEnum.WAITING;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -52,7 +52,7 @@ public class Game {
     private AIOpponent aiOpponent;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "winner_type", columnDefinition = "winner_type_enum")
+    @Column(name = "winner_type")
     private WinnerTypeEnum winnerType = WinnerTypeEnum.NONE;
 
     @ManyToOne(fetch = FetchType.LAZY)

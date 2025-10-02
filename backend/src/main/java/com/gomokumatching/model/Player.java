@@ -8,7 +8,7 @@ import lombok.ToString;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.OffsetDateTime;
-import java.util.List;
+import java.util.UUID;
 
 @Data
 @Entity
@@ -16,14 +16,18 @@ import java.util.List;
 public class Player {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
     @Column(name = "player_id")
-    private String playerId; // Changed to String to store Firebase UID
+    private UUID playerId;
 
     @Column(name = "username", nullable = false, unique = true, length = 50)
     private String username;
 
     @Column(name = "email", nullable = false, unique = true)
     private String email;
+
+    @Column(name = "password_hash", nullable = false)
+    private String passwordHash;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false, columnDefinition = "TIMESTAMP WITH TIME ZONE")
@@ -36,21 +40,11 @@ public class Player {
     private boolean isActive = true;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "account_status", columnDefinition = "account_status_enum")
+    @Column(name = "account_status")
     private AccountStatusEnum accountStatus = AccountStatusEnum.ACTIVE;
 
     @OneToOne(mappedBy = "player", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
     private PlayerStats stats;
-
-    @OneToMany(mappedBy = "player")
-    @ToString.Exclude
-    @EqualsAndHashCode.Exclude
-    private List<MatchmakingQueue> matchmakingQueues;
-
-    @OneToMany(mappedBy = "player")
-    @ToString.Exclude
-    @EqualsAndHashCode.Exclude
-    private List<GameSession> gameSessions;
 }

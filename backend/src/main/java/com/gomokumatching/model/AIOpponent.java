@@ -24,7 +24,7 @@ public class AIOpponent {
     private String name;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "difficulty_level", nullable = false, columnDefinition = "difficulty_level_enum")
+    @Column(name = "difficulty_level", nullable = false)
     private DifficultyLevelEnum difficultyLevel;
 
     @Column(name = "model_version", nullable = false, length = 50)

@@ -1,12 +1,13 @@
 # 🐳 Gomoku Development Environment
 
-A Docker-based development environment for a Gomoku game backend featuring PostgreSQL, pgAdmin, and optional Kafka messaging.
+A Docker-based development environment for a Gomoku game backend with PostgreSQL, Redis, Kafka, and pgAdmin.
 
 ## 📋 What's Included
 
 - **PostgreSQL 17**: Primary database with custom schema
+- **Redis 7**: In-memory cache for active game sessions and matchmaking queue
+- **Apache Kafka**: Event streaming for game replay logging and analytics
 - **pgAdmin 4**: Web-based database management interface
-- **Apache Kafka**: Message broker for real-time game events (optional)
 - **Auto-initialization**: Database schema and sample data setup
 - **Pre-configured connections**: pgAdmin automatically connects to PostgreSQL
 
@@ -14,26 +15,32 @@ A Docker-based development environment for a Gomoku game backend featuring Postg
 
 ### Prerequisites
 - Docker and Docker Compose installed
-- Port 5432 (PostgreSQL), 5050 (pgAdmin), and 9092 (Kafka) available
+- Ports available: 5432 (PostgreSQL), 6379 (Redis), 9092 (Kafka), 5050 (pgAdmin)
 
-### 1. Start the Environment
+### 1. Start the Full Environment
 
-**Option A: Database Only (Recommended for beginners)**
+**Start all services (required for backend):**
 ```bash
-docker-compose up -d postgres pgadmin
+# From project root
+docker-compose up -d
 ```
 
-**Option B: Full Stack with Kafka**
-```bash
-docker-compose --profile kafka up -d
-```
+This starts:
+- PostgreSQL (database)
+- Redis (game session cache + matchmaking queue)
+- Kafka + Zookeeper (event logging)
+- pgAdmin (database UI)
 
 ### 2. Verify Everything is Running
 ```bash
 # Check container status
 docker-compose ps
 
-# Should show postgres and pgadmin as "running"
+# Should show: postgres, redis, kafka, zookeeper, pgadmin as "running"
+
+# Test Redis connection
+docker exec -it $(docker ps -qf "name=redis") redis-cli ping
+# Should return: PONG
 ```
 
 ## 📁 File Structure
@@ -53,8 +60,9 @@ gomoku-backend/
 | Service | URL/Connection | Credentials |
 |---------|---------------|-------------|
 | **PostgreSQL** | `localhost:5432` | User: `gomoku_user`<br>Password: `gomoku_password`<br>Database: `gomoku_db` |
-| **pgAdmin** | http://localhost:5050 | Email: `admin@gomoku.dev`<br>Password: `admin123` |
+| **Redis** | `localhost:6379` | No password (dev environment) |
 | **Kafka** | `localhost:9092` | No authentication required |
+| **pgAdmin** | http://localhost:5050 | Email: `admin@gomoku.dev`<br>Password: `admin123` |
 
 ## 🔧 Using pgAdmin
 
@@ -76,7 +84,7 @@ spring:
     username: gomoku_user
     password: gomoku_password
     driver-class-name: org.postgresql.Driver
-  
+
   jpa:
     hibernate:
       ddl-auto: validate  # Use our init script, don't auto-create
@@ -85,13 +93,23 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         default_schema: gomoku
-    
-  # Kafka configuration (optional)
+
+  # Redis configuration (required for game sessions & matchmaking)
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 60000
+
+  # Kafka configuration (required for game replay logging)
   kafka:
     bootstrap-servers: localhost:9092
     consumer:
       group-id: gomoku-app
       auto-offset-reset: latest
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 ```
 
 
@@ -104,8 +122,34 @@ docker exec -it gomoku-postgres psql -U gomoku_user -d gomoku_db
 
 # Inside psql:
 \dt gomoku.*              # List tables
-SELECT * FROM gomoku.players;  # Query data
+SELECT * FROM gomoku.player;  # Query data
 \q                        # Exit
+```
+
+### Redis Operations
+```bash
+# Connect to Redis CLI
+docker exec -it $(docker ps -qf "name=redis") redis-cli
+
+# Inside redis-cli:
+KEYS matchmaking:queue    # View matchmaking queue
+KEYS game:*              # View active game sessions
+ZRANGE matchmaking:queue 0 -1 WITHSCORES  # View queue with timestamps
+GET game:session:{gameId}  # View specific game session
+FLUSHDB                  # Clear all keys (⚠️ development only!)
+```
+
+### Kafka Operations
+```bash
+# List topics
+docker exec -it $(docker ps -qf "name=kafka") kafka-topics --list --bootstrap-server localhost:9092
+
+# Create topics (if not auto-created)
+docker exec -it $(docker ps -qf "name=kafka") kafka-topics --create --topic game-move-made --bootstrap-server localhost:9092
+docker exec -it $(docker ps -qf "name=kafka") kafka-topics --create --topic match-created --bootstrap-server localhost:9092
+
+# Consume messages (for debugging)
+docker exec -it $(docker ps -qf "name=kafka") kafka-console-consumer --topic game-move-made --from-beginning --bootstrap-server localhost:9092
 ```
 
 ### Backup & Restore
@@ -159,16 +203,36 @@ docker-compose up -d postgres pgadmin
 3. pgAdmin starts and loads pre-configured server from `servers.json`
 4. Health checks ensure services start in correct order
 
-### Optional Kafka Profile
-- Kafka only starts when explicitly requested: `docker-compose --profile kafka up`
-- Configured for single-node setup (perfect for development)
-- Ready for real-time game events and messaging
+### Hybrid Architecture
+- **Redis**: Used for active game sessions (`int[][] board`) and matchmaking queue (ZADD/ZPOPMIN)
+- **Kafka**: Logs all moves to `game-move-made` and `match-created` topics for game replay
+- **PostgreSQL**: Final persistence of game history, player stats, and analytics
+- All services are required and start together with `docker-compose up`
 
-## 📝 File Contents
+## 📝 Database Schema
 
-We need to update this when we make changes to our models.
-### `db/init/01_create_tables.sql`
-*You'll need to create this file with your specific database schema for the Gomoku game.*
+### `db/init/init.sql`
+The database initialization script is located at `db/init/init.sql` and runs automatically when PostgreSQL container starts.
+
+**5 Core Tables (Minimal Schema):**
+1. `player` - User profiles (linked to Firebase UID)
+2. `player_stats` - Player statistics and MMR
+3. `ai_opponent` - AI bot configurations
+4. `game` - Completed game records
+5. `game_move` - Individual moves for game replay (populated by Kafka consumers)
+
+**Removed Tables (Handled by Redis/Kafka):**
+- ~~`matchmaking_queue`~~ → Redis sorted set handles active queue
+- ~~`game_session`~~ → Redis caches active WebSocket sessions
+- ~~`kafka_event_log`~~ → Kafka IS the event log
+- ~~`leaderboard`~~ → Not implemented yet
+
+**Deferred Tables (Future Analytics):**
+- `game_analytics` - Post-game analysis (add later)
+- `ai_model_performance` - AI performance tracking (add later)
+- `player_ai_matchup` - Player vs AI stats (add later)
+
+> **Architecture**: PostgreSQL stores only final persistence. Active games live in Redis, events stream through Kafka.
 
 
 ## 🤝 Contributing
