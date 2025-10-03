@@ -247,20 +247,20 @@ CORS_ORIGINS=http://localhost:8080
 
 ## Integration with Spring Boot
 
-The Spring Boot backend communicates with this service via `AIServiceClient`:
+The Spring Boot backend communicates with this service via **HTTP/REST** using `AIServiceClient`:
 
 ```java
 @Autowired
 private AIServiceClient aiServiceClient;
 
-// Get AI move
+// Get AI move via HTTP POST
 AIMoveResponse move = aiServiceClient.getAIMove(
     boardState,
     currentPlayer,
     "medium"
 );
 
-// Check game over
+// Check game over via HTTP POST
 GameOverResponse result = aiServiceClient.checkGameOver(
     boardState,
     lastRow,
@@ -268,11 +268,13 @@ GameOverResponse result = aiServiceClient.checkGameOver(
 );
 ```
 
+**Communication Protocol**: HTTP/1.1 with JSON payloads
+
 Configure in `application.yml`:
 ```yaml
 ai:
   service:
-    url: http://localhost:8001
+    url: http://localhost:8001  # HTTP endpoint
 ```
 
 ## Performance
