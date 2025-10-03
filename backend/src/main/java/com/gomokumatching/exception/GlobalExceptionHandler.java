@@ -116,6 +116,146 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handle game not found exceptions.
+     *
+     * @param ex GameNotFoundException
+     * @return 404 Not Found
+     */
+    @ExceptionHandler(GameNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleGameNotFound(GameNotFoundException ex) {
+        logger.warn("Game not found: {}", ex.getMessage());
+
+        ErrorResponse response = ErrorResponse.builder()
+                .timestamp(OffsetDateTime.now())
+                .status(HttpStatus.NOT_FOUND.value())
+                .error("Game Not Found")
+                .message(ex.getMessage())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+    }
+
+    /**
+     * Handle invalid move exceptions.
+     *
+     * @param ex InvalidMoveException
+     * @return 400 Bad Request
+     */
+    @ExceptionHandler(InvalidMoveException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidMove(InvalidMoveException ex) {
+        logger.warn("Invalid move: {}", ex.getMessage());
+
+        ErrorResponse response = ErrorResponse.builder()
+                .timestamp(OffsetDateTime.now())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .error("Invalid Move")
+                .message(ex.getMessage())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    /**
+     * Handle unauthorized game access exceptions.
+     *
+     * @param ex UnauthorizedGameAccessException
+     * @return 403 Forbidden
+     */
+    @ExceptionHandler(UnauthorizedGameAccessException.class)
+    public ResponseEntity<ErrorResponse> handleUnauthorizedGameAccess(UnauthorizedGameAccessException ex) {
+        logger.warn("Unauthorized game access: {}", ex.getMessage());
+
+        ErrorResponse response = ErrorResponse.builder()
+                .timestamp(OffsetDateTime.now())
+                .status(HttpStatus.FORBIDDEN.value())
+                .error("Unauthorized")
+                .message(ex.getMessage())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+    }
+
+    /**
+     * Handle game already completed exceptions.
+     *
+     * @param ex GameAlreadyCompletedException
+     * @return 409 Conflict
+     */
+    @ExceptionHandler(GameAlreadyCompletedException.class)
+    public ResponseEntity<ErrorResponse> handleGameAlreadyCompleted(GameAlreadyCompletedException ex) {
+        logger.warn("Game already completed: {}", ex.getMessage());
+
+        ErrorResponse response = ErrorResponse.builder()
+                .timestamp(OffsetDateTime.now())
+                .status(HttpStatus.CONFLICT.value())
+                .error("Game Already Completed")
+                .message(ex.getMessage())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+
+    /**
+     * Handle invalid game request exceptions.
+     *
+     * @param ex InvalidGameRequestException
+     * @return 400 Bad Request
+     */
+    @ExceptionHandler(InvalidGameRequestException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidGameRequest(InvalidGameRequestException ex) {
+        logger.warn("Invalid game request: {}", ex.getMessage());
+
+        ErrorResponse response = ErrorResponse.builder()
+                .timestamp(OffsetDateTime.now())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .error("Invalid Game Request")
+                .message(ex.getMessage())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    /**
+     * Handle illegal state exceptions (from GameService).
+     *
+     * @param ex IllegalStateException
+     * @return 409 Conflict
+     */
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalState(IllegalStateException ex) {
+        logger.warn("Illegal state: {}", ex.getMessage());
+
+        ErrorResponse response = ErrorResponse.builder()
+                .timestamp(OffsetDateTime.now())
+                .status(HttpStatus.CONFLICT.value())
+                .error("Illegal State")
+                .message(ex.getMessage())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+
+    /**
+     * Handle illegal argument exceptions (from GameService).
+     *
+     * @param ex IllegalArgumentException
+     * @return 400 Bad Request
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
+        logger.warn("Illegal argument: {}", ex.getMessage());
+
+        ErrorResponse response = ErrorResponse.builder()
+                .timestamp(OffsetDateTime.now())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .error("Invalid Input")
+                .message(ex.getMessage())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    /**
      * Handle all other unhandled exceptions.
      *
      * @param ex Exception
