@@ -1,10 +1,20 @@
+# ===================================
+# APPLICATION CONFIGURATION
+# ===================================
 spring:
+  application:
+    name: backend
+
+  # ===================================
+  # DATABASE CONFIGURATION
+  # ===================================
   datasource:
     url: jdbc:postgresql://localhost:5432/gomoku_db
     username: gomoku_user
     password: gomoku_password
     driver-class-name: org.postgresql.Driver
 
+  # JPA/Hibernate Configuration
   jpa:
     hibernate:
       ddl-auto: validate  # Use our init script, don't auto-create
@@ -13,10 +23,58 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         default_schema: gomoku
+        format_sql: true
+        use_sql_comments: true
 
-  # Kafka configuration
+  # ===================================
+  # REDIS CONFIGURATION
+  # ===================================
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 60000
+
+  # ===================================
+  # KAFKA CONFIGURATION
+  # ===================================
   kafka:
     bootstrap-servers: localhost:9092
     consumer:
       group-id: gomoku-app
       auto-offset-reset: latest
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+# ===================================
+# JWT CONFIGURATION
+# ===================================
+# IMPORTANT: Change this secret in production!
+# Generate a secure 512-bit key using: openssl rand -base64 64
+app:
+  jwt:
+    secret: ItsASuperSecretJwtKeyThatShouldBe512BitsLongForHMACSHA512PleaseChangeThisInProduction
+    expiration-ms: 900000
+    refresh-expiration-ms: 604800000
+
+# ===================================
+# LOGGING CONFIGURATION
+# ===================================
+logging:
+  level:
+    root: INFO
+    com.gomokumatching: DEBUG
+    org.springframework.security: DEBUG
+  pattern:
+    console: '%d{yyyy-MM-dd HH:mm:ss} - %msg%n'
+
+# ===================================
+# SERVER CONFIGURATION
+# ===================================
+server:
+  port: 8080
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: on_param
