@@ -59,6 +59,13 @@ app:
     refresh-expiration-ms: 604800000
 
 # ===================================
+# AI SERVICE CONFIGURATION
+# ===================================
+ai:
+  service:
+    url: http://localhost:8001
+
+# ===================================
 # LOGGING CONFIGURATION
 # ===================================
 logging:

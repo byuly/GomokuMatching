@@ -1,5 +1,6 @@
 package com.gomokumatching.controller;
 
+import com.gomokumatching.client.AIServiceClient;
 import com.gomokumatching.exception.GameNotFoundException;
 import com.gomokumatching.exception.InvalidGameRequestException;
 import com.gomokumatching.model.GameSession;
@@ -42,6 +43,7 @@ public class GameController {
     private final GameService gameService;
     private final GameAuthorizationService authService;
     private final RedisService redisService;
+    private final AIServiceClient aiServiceClient;
 
     /**
      * Create a new game (PvP or PvAI).
@@ -142,7 +144,39 @@ public class GameController {
         log.info("Move processed for game {}: moveCount={}, status={}",
                 gameId, session.getMoveCount(), session.getStatus());
 
-        // TODO Phase 3: If game ongoing and AI's turn, call AI service and process AI move
+        // If game is PvAI and still ongoing, get AI move
+        if (session.getGameType() == GameSession.GameType.HUMAN_VS_AI &&
+            session.getStatus() == GameSession.GameStatus.IN_PROGRESS) {
+
+            log.info("Getting AI move for game {}", gameId);
+
+            try {
+                // Get AI move from Django service
+                AIServiceClient.AIMoveResponse aiMove = aiServiceClient.getAIMove(
+                    session.getBoard(),
+                    session.getCurrentPlayer(),
+                    "medium"  // Default difficulty, can be made configurable
+                );
+
+                log.info("AI move for game {}: row={}, col={}", gameId, aiMove.getRow(), aiMove.getCol());
+
+                // Process AI move
+                session = gameService.processMove(
+                    gameId,
+                    session.getPlayer2Id(),  // AI is player 2
+                    aiMove.getRow(),
+                    aiMove.getCol()
+                );
+
+                log.info("AI move processed for game {}: moveCount={}, status={}",
+                        gameId, session.getMoveCount(), session.getStatus());
+
+            } catch (AIServiceClient.AIServiceException e) {
+                log.error("AI service error for game {}: {}", gameId, e.getMessage());
+                // Don't fail the request, just return state after player move
+                // Frontend can retry or handle gracefully
+            }
+        }
 
         return ResponseEntity.ok(GameStateResponse.fromGameSession(session));
     }
