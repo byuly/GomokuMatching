@@ -8,7 +8,6 @@ import com.gomokumatching.model.dto.game.*;
 import com.gomokumatching.security.CustomUserDetails;
 import com.gomokumatching.service.GameAuthorizationService;
 import com.gomokumatching.service.GameService;
-import com.gomokumatching.service.RedisService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,7 +41,6 @@ public class GameController {
 
     private final GameService gameService;
     private final GameAuthorizationService authService;
-    private final RedisService redisService;
     private final AIServiceClient aiServiceClient;
 
     /**

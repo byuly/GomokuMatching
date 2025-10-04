@@ -48,15 +48,15 @@ spring:
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
 # ===================================
-# JWT CONFIGURATION
+# JWT CONFIGURATION (Development Settings)
 # ===================================
 # IMPORTANT: Change this secret in production!
 # Generate a secure 512-bit key using: openssl rand -base64 64
 app:
   jwt:
     secret: ItsASuperSecretJwtKeyThatShouldBe512BitsLongForHMACSHA512PleaseChangeThisInProduction
-    expiration-ms: 900000
-    refresh-expiration-ms: 604800000
+    expiration-ms: 86400000  # 24 hours for development (change to 900000 = 15 min in production)
+    refresh-expiration-ms: 604800000  # 7 days
 
 # ===================================
 # AI SERVICE CONFIGURATION
