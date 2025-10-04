@@ -21,7 +21,6 @@ import java.util.UUID;
 public class Game {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.AUTO)
     @Column(name = "game_id")
     private UUID gameId;
 
@@ -77,6 +76,10 @@ public class Game {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "final_board_state", columnDefinition = "jsonb")
     private String finalBoardState;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "move_sequence", columnDefinition = "jsonb")
+    private String moveSequence;
 
     @Column(name = "game_duration_seconds")
     private Integer gameDurationSeconds;

@@ -6,18 +6,21 @@ services:
     image: postgres:15-alpine
     container_name: gomoku-postgres
     environment:
-      POSTGRES_DB: gomoku
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: gomoku_db
+      POSTGRES_USER: gomoku_user
+      POSTGRES_PASSWORD: gomoku_password
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./backend/db/init:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U gomoku_user -d gomoku_db"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - gomoku-net
 
   # Redis Cache
   redis:
@@ -32,15 +35,20 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - gomoku-net
 
-  # Kafka (optional - for event streaming)
+  # Zookeeper (for Kafka)
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
     container_name: gomoku-zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - gomoku-net
 
+  # Kafka (for event streaming - Phase 5)
   kafka:
     image: confluentinc/cp-kafka:7.4.0
     container_name: gomoku-kafka
@@ -53,6 +61,32 @@ services:
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - gomoku-net
+
+  # AI Service (Django) - Stateless AI calculations
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: gomoku-ai-service
+    ports:
+      - "8001:8000"
+    environment:
+      DJANGO_SETTINGS_MODULE: gomoku_ai.settings.development
+      ALLOWED_HOSTS: localhost,backend,ai-service
+      CORS_ORIGINS: http://localhost:8080,http://backend:8080
+    volumes:
+      - ai_models:/app/models
+      - ai_logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - gomoku-net
 
   # Spring Boot Backend
   backend:
@@ -65,47 +99,55 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      ai-service:
+        condition: service_started
     ports:
       - "8080:8080"
     environment:
       SPRING_PROFILES_ACTIVE: docker
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/gomoku
-      SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/gomoku_db
+      SPRING_DATASOURCE_USERNAME: gomoku_user
+      SPRING_DATASOURCE_PASSWORD: gomoku_password
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       AI_SERVICE_URL: http://ai-service:8000
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
+    networks:
+      - gomoku-net
 
-  # AI Service (Django)
-  ai-service:
-    build:
-      context: ./ai-service
-      dockerfile: Dockerfile
-    container_name: gomoku-ai-service
-    ports:
-      - "8001:8000"
+  # pgAdmin - PostgreSQL GUI (http://localhost:5050)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: gomoku-pgadmin
     environment:
-      DJANGO_SETTINGS_MODULE: gomoku_ai.settings.production
-      DJANGO_SECRET_KEY: ${AI_SECRET_KEY:-change-me-in-production}
-      ALLOWED_HOSTS: localhost,backend,ai-service
-      CORS_ORIGINS: http://localhost:8080,http://backend:8080
+      PGADMIN_DEFAULT_EMAIL: admin@gomoku.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
     volumes:
-      - ai_models:/app/models
-      - ai_logs:/app/logs
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - gomoku-net
+
+  # Redis Commander - Redis GUI (http://localhost:8081)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: gomoku-redis-commander
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - "8081:8081"
+    networks:
+      - gomoku-net
 
 volumes:
   postgres_data:
   redis_data:
   ai_models:
   ai_logs:
+  pgadmin_data:
+
+networks:
+  gomoku-net:
+    driver: bridge

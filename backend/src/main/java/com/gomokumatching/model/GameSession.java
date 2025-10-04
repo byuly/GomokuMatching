@@ -7,6 +7,8 @@ import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -77,6 +79,12 @@ public class GameSession implements Serializable {
     private int moveCount;
 
     /**
+     * Move history as list of [row, col, player]
+     * Example: [[7,7,1], [7,8,2], [6,6,1]]
+     */
+    private List<int[]> moveHistory = new ArrayList<>();
+
+    /**
      * Winner type (null if game in progress)
      */
     private String winnerType;
@@ -135,6 +143,7 @@ public class GameSession implements Serializable {
             throw new IllegalArgumentException("Invalid move: position (" + row + ", " + col + ") is occupied or out of bounds");
         }
         board[row][col] = player;
+        moveHistory.add(new int[]{row, col, player});
         moveCount++;
         lastActivity = LocalDateTime.now();
     }
@@ -149,7 +158,7 @@ public class GameSession implements Serializable {
     /**
      * Check if board is full (draw condition)
      */
-    public boolean isBoardFull() {
+    public boolean checkIfBoardFull() {
         return moveCount >= 225; // 15 * 15
     }
 

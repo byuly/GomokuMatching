@@ -66,6 +66,7 @@ CREATE TABLE game (
     ended_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     final_board_state JSONB,
+    move_sequence JSONB,
     game_duration_seconds INTEGER CHECK (game_duration_seconds >= 0),
     CONSTRAINT game_type_consistency CHECK (
         (game_type = 'HUMAN_VS_HUMAN' AND player2_id IS NOT NULL AND ai_opponent_id IS NULL) OR

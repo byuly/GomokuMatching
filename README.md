@@ -4,18 +4,18 @@
 
 **Gomoku 1v1** is a competitive, real-time strategy board game where two players face off to place five stones in a row on a grid. The game supports both human-vs-human matches and human-vs-AI matches, featuring machine learning-powered AI opponents with varying skill levels.
 
-Built on a scalable matchmaking backend with Kafka, Spring Boot, and WebSockets, Gomoku 1v1 delivers a smooth, engaging experience blending classic gameplay with modern AI challenge.
+Built with Spring Boot, Redis, PostgreSQL, and a Django-based AI service, the application delivers real-time gameplay with WebSocket support and persistent game history.
 
 ---
 
 ## 🎯 Game Concept
 
-- Two players compete on a 15x15 grid to be the first to align five stones horizontally, vertically, or diagonally.
-- Matches can be player-vs-player or player-vs-machine learning AI.
-- AI opponents use trained ML models to evaluate board states and make strategic moves.
-- Real-time matchmaking pairs players or assigns AI opponents based on difficulty.
-- Live score updates and game state streamed to clients for instant feedback.
-- Players can track wins, losses, and ranking through a live dashboard.
+- Two players compete on a 15x15 grid to align five stones horizontally, vertically, or diagonally
+- Player-vs-player matches use WebSocket for real-time bidirectional communication
+- Player-vs-AI matches communicate with Django microservice for move calculation
+- Active game state cached in Redis with 2-hour TTL
+- Completed games persisted to PostgreSQL with full move history
+- JWT-based authentication for secure player identification
 
 ---
 
@@ -160,16 +160,21 @@ gomoku-matching/
 │   │       └── FirebaseFilter.java
 │   └── pom.xml
 │
-├── ai-service/                             # Python AI microservice
-│   ├── app/
-│   │   ├── main.py                         # FastAPI or gRPC server
-│   │   ├── ai_engine.py                    # PyTorch model inference
+├── ai-service/                             # Python AI microservice (Django)
+│   ├── gomoku_ai/
+│   │   ├── settings/                       # Django settings (dev/prod)
+│   │   ├── urls.py                         # URL routing
+│   │   └── wsgi.py                         # WSGI application
+│   ├── ai_engine/
+│   │   ├── views.py                        # Django REST API endpoints
+│   │   ├── ai_logic.py                     # PyTorch model inference
 │   │   ├── minimax.py                      # Minimax algorithm
 │   │   └── models/
 │   │       ├── easy_model.pth
 │   │       ├── medium_model.pth
 │   │       └── hard_model.pth
 │   ├── requirements.txt
+│   ├── manage.py
 │   └── Dockerfile
 │
 ├── frontend/                               # React frontend
@@ -192,120 +197,141 @@ gomoku-matching/
 
 | Component                | Technology                          | Purpose                                    |
 |--------------------------|-------------------------------------|--------------------------------------------|
-| **Backend**              | Java Spring Boot                    | Main application server                    |
-| **Authentication**       | Google Firebase                     | User sign-up, login, and token validation |
-| **Real-Time Updates**    | Spring WebSockets (STOMP/SockJS)    | Immediate game state broadcasting          |
-| **Event Processing**     | Apache Kafka                        | Event logging, analytics, event sourcing   |
-| **Matchmaking**          | Redis (Queue)                       | FIFO player pairing with ZADD/ZPOPMIN      |
-| **Active Game Cache**    | Redis (Cache)                       | In-memory game sessions with TTL           |
-| **AI Opponent**          | Python + PyTorch                    | Microservice for ML-based move calculation |
-| **AI Communication**     | HTTP/gRPC                           | Spring Boot ↔ Python AI service            |
-| **Database**             | PostgreSQL                          | Player data, game history, statistics     |
-| **Frontend**             | Vite + React + TypeScript           | Game UI, board visualization               |
-| **Styling**              | TailwindCSS                         | Modern responsive design                   |
+| **Backend**              | Java Spring Boot 3.5                | REST API and WebSocket server              |
+| **Authentication**       | JWT (Spring Security)               | Token-based authentication                 |
+| **Real-Time Updates**    | Spring WebSockets (STOMP)           | PvP game state broadcasting                |
+| **Active Game Cache**    | Redis 7                             | In-memory sessions with 2-hour TTL         |
+| **AI Opponent**          | Django + Python                     | Microservice for move calculation          |
+| **AI Communication**     | HTTP REST                           | Spring Boot → Django                       |
+| **Database**             | PostgreSQL 15                       | Player data, game history, statistics      |
 | **Containerization**     | Docker Compose                      | Multi-service orchestration                |
 
 ---
 
 ## 🔐 Authentication
 
-Authentication is handled by **Firebase Authentication**, providing a secure and scalable solution.
+JWT-based authentication with Spring Security.
 
--   **Provider**: Google Firebase (supports email/password, Google Sign-In, and other social logins).
--   **Flow**:
-    1.  The React frontend uses the Firebase SDK to handle all user sign-up and login flows.
-    2.  Upon successful login, the client receives a **Firebase ID Token (JWT)**.
-    3.  This token is sent to the Spring Boot backend with every authenticated API request.
--   **Backend**: The backend uses the Firebase Admin SDK to verify the ID token. It does not handle or store any user passwords.
--   **User Profiles**: The `PLAYER` table in the PostgreSQL database stores user profile information, linked to Firebase via the user's unique Firebase ID (UID).
+**Registration Flow:**
+1. Client sends username, email, password to `/api/auth/register`
+2. Backend hashes password with BCrypt (work factor 12)
+3. User record created in PostgreSQL `player` table
+4. PlayerStats record auto-created with default values
+
+**Login Flow:**
+1. Client sends credentials to `/api/auth/login`
+2. Backend validates against BCrypt hash
+3. JWT access token generated (1 hour expiry)
+4. JWT refresh token generated (7 days expiry)
+5. Tokens returned to client
+
+**Protected Endpoints:**
+- Client includes `Authorization: Bearer <token>` header
+- Spring Security filter validates JWT signature and expiry
+- User context extracted from token claims
 
 ---
 
-## 🎮 Hybrid Gameplay Workflow
+## 🎮 Gameplay Workflow
 
-### **1. Player Matchmaking Flow (Redis Queue + Kafka Logging)**
+### **1. Game Creation**
 
-1. Player clicks "Find Match" in React UI
-2. Frontend sends request to MatchmakingController
-3. MatchmakingService processes via Redis:
-   - **ZADD** matchmaking:queue {timestamp} {playerId} → Add to FIFO queue
-   - **ZPOPMIN** matchmaking:queue 2 → Get two oldest waiting players
-   - If pair found: creates match, removes from queue
-   - If not found: player remains in queue
-4. Match created → Produces event to `match-created` Kafka topic for analytics
-5. Players get WebSocket notification of match confirmation
+**PvP:**
+1. Client POST `/api/matchmaking/create-pvp` with opponent username
+2. Backend creates GameSession with unique UUID
+3. Session stored in Redis with 2-hour TTL
+4. WebSocket rooms created for both players
 
-### **2. Player Move Flow (WebSocket Primary + Kafka Logging)**
+**PvAI:**
+1. Client POST `/api/matchmaking/create-pvai` with AI opponent ID
+2. Backend creates GameSession (player2Id = null, aiOpponentId set)
+3. Session stored in Redis
 
-1. Player clicks board position in React UI
-2. Frontend sends move via WebSocket to GameController
-3. GameService processes move immediately:
-   - Validates move against Redis cached game session
-   - Updates int[][] board in Redis
-   - Checks win conditions
-   - Broadcasts updated board via WebSocket to both players
-4. Asynchronously: produces event to `game-move-made` Kafka topic:
-   - Event logging for replay capability
-   - Move analytics
-   - Game history persistence
+### **2. Move Processing (PvP)**
 
-### **3. AI Opponent Flow (Python Microservice + Same Logging)**
+1. Player clicks board position
+2. WebSocket message sent to `/app/game/{gameId}/move`
+3. GameService validates move:
+   - Check player authorization
+   - Validate move legality (position empty, correct turn)
+   - Update int[][] board in GameSession
+   - Check win condition (5 in a row)
+4. Updated state broadcast via WebSocket to both players
+5. GameSession updated in Redis
 
-1. After player move, GameService detects AI turn
-2. Spring Boot sends HTTP/gRPC request to Python AI service:
-   - Passes current board state (int[][])
-   - Specifies difficulty level
-3. Python AI service calculates move:
-   - Loads appropriate PyTorch model (easy/medium/hard)
-   - Runs minimax with neural net evaluation
+### **3. Move Processing (PvAI)**
+
+1. Player POST `/api/game/{gameId}/move` with row/col
+2. GameService processes player move (same validation)
+3. If game still in progress, request AI move:
+   - HTTP POST to Django service at `http://ai-service:8000/api/ai/move`
+   - Django loads model based on difficulty
    - Returns optimal move coordinates
-4. GameService applies AI move (treated as regular player move):
-   - Updates Redis cache
-   - Broadcasts to player
-   - **Logs to same `game-move-made` topic** (AI moves logged like player moves)
+4. GameService processes AI move
+5. Return updated state to client
 
-### **4. Game Completion Flow (Immediate + Background)**
+### **4. Game Completion**
 
-1. Win condition detected by GameService
-2. Immediate actions via WebSocket/HTTP:
-   - Broadcast final results to players
-   - Update Redis game session status to COMPLETED
-   - Display winner and game summary
-3. Background processing via Kafka:
-   - Persist final game state to PostgreSQL
-   - Update player statistics (wins/losses/MMR)
-   - Match history persistence with all moves from replay log
+When win/draw/forfeit detected:
+1. GameSession status set to COMPLETED/ABANDONED
+2. `saveCompletedGameToDatabase()` called:
+   - Convert GameSession → Game entity
+   - Map enums and relationships
+   - Serialize final board state as JSONB
+   - Serialize move sequence as JSONB array `[[row, col, player], ...]`
+   - Save to PostgreSQL
+3. Redis session remains available for retrieval
+4. TTL ensures cleanup after 2 hours
+
+**Move History Format:**
+```json
+{
+  "game_id": "0e086cf4-40ae-43f6-9fce-7ac9374ac100",
+  "move_sequence": [
+    [7, 7, 1],
+    [8, 7, 2],
+    [7, 8, 1],
+    [8, 8, 2],
+    [7, 9, 1]
+  ]
+}
+```
+Each move is `[row, col, player]` where player is `1` (Player 1) or `2` (Player 2/AI).
 
 ---
 
-## 🤖 Python AI Microservice Architecture
+## 🤖 AI Service Architecture
 
-The AI opponent is implemented as a **separate Python microservice** running alongside the Spring Boot backend. This architecture provides:
+Separate Django microservice handles AI move calculations:
 
-- **Native PyTorch support**: Full Python ecosystem without JVM limitations
-- **Model flexibility**: Easy to train, update, and deploy new models
-- **Performance**: Optimized inference without JNI overhead
-- **Separation of concerns**: AI logic isolated from game server
+- **Django REST Framework**: HTTP endpoint for move requests
+- **Isolated service**: AI logic decoupled from game server
+- **Future extensibility**: Ready for ML model integration
+- **Simple communication**: HTTP REST requests from Spring Boot
 
 ### AI Service Structure
 
 ```python
-# ai-service/app/main.py (FastAPI example)
-from fastapi import FastAPI
-from pydantic import BaseModel
+# ai-service/ai_engine/views.py (Django REST API)
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+import json
 import torch
 
-app = FastAPI()
+@csrf_exempt
+def calculate_move(request):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        board = data['board']        # 15x15 board state
+        difficulty = data['difficulty']  # "easy", "medium", "hard"
 
-class MoveRequest(BaseModel):
-    board: list[list[int]]  # 15x15 board state
-    difficulty: str          # "easy", "medium", "hard"
+        model = load_model(difficulty)
+        best_move = ai_engine.evaluate(board, model)
 
-@app.post("/calculate-move")
-async def calculate_move(request: MoveRequest):
-    model = load_model(request.difficulty)
-    best_move = ai_engine.evaluate(request.board, model)
-    return {"row": best_move[0], "col": best_move[1]}
+        return JsonResponse({
+            "row": best_move[0],
+            "col": best_move[1]
+        })
 ```
 
 ### Spring Boot Integration
@@ -330,7 +356,7 @@ public class AIServiceClient {
 | **HTTP/REST** | Simple request/response | Easy debugging, familiar | Slight overhead |
 | **gRPC** | High-performance | Binary protocol, fast | More complex setup |
 
-For this project, **HTTP/REST with FastAPI** is recommended for simplicity.
+For this project, **HTTP/REST with Django** is used for simplicity and Python ML library compatibility.
 
 ---
 ## 🎯 Data Structure Decision: **2D Integer Array**
@@ -354,141 +380,139 @@ int[][] board = new int[15][15];
 
 ## 🏗️ Storage Architecture
 
-### **3-Tier Storage Strategy**
+### **2-Tier Storage Strategy**
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    REAL-TIME GAMEPLAY LAYER                    │
+│                    ACTIVE GAME LAYER (Redis)                   │
 ├─────────────────────────────────────────────────────────────────┤
-│ Redis/In-Memory Cache                                           │
-│ • Active games: GameSession objects                             │
-│ • Board: int[][] (2D array)                                    │
-│ • TTL: 2 hours (auto-expire)                                   │
-│ • Purpose: Sub-100ms move validation & broadcasting             │
+│ • GameSession objects with int[][] board                        │
+│ • Key: game:session:{UUID}                                     │
+│ • TTL: 2 hours (auto-cleanup)                                  │
+│ • Purpose: Fast move validation and real-time updates          │
 └─────────────────────────────────────────────────────────────────┘
                                 │
-                                ▼
+                                ▼ (On completion/forfeit)
 ┌─────────────────────────────────────────────────────────────────┐
-│                     EVENT STREAMING LAYER                      │
+│                 PERSISTENCE LAYER (PostgreSQL)                 │
 ├─────────────────────────────────────────────────────────────────┤
-│ Apache Kafka (Shadow Logging)                                  │
-│ • Every move → game-events topic                               │
-│ • Board serialized as JSON: "[[0,1,0,...],[2,0,1,...]]"      │
-│ • Purpose: Analytics, replay, anti-cheat, audit trail          │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼ (On Game Completion)
-┌─────────────────────────────────────────────────────────────────┐
-│                    PERSISTENCE LAYER                           │
-├─────────────────────────────────────────────────────────────────┤
-│ PostgreSQL Database                                             │
-│ • Final board state as JSON TEXT column                        │
-│ • Individual moves in game_moves table                         │
-│ • Purpose: Player stats, history, leaderboards                 │
+│ • game table: Final state, winner, duration                    │
+│ • final_board_state: JSONB snapshot of final board            │
+│ • move_sequence: JSONB array [[row,col,player],...]           │
+│ • game_move table: Reserved for future Kafka integration      │
+│ • player_stats: Wins, losses, MMR tracking                     │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## 🎮 Data Flow by Game Type
+## 🎮 Data Flow
 
-### **Player vs Player (WebSocket)**
-1. **Move Request** → Validate against `Redis int[][]` board
-2. **Update Cache** → Modify 2D array, broadcast via WebSocket
-3. **Shadow Log** → Serialize to JSON, send to Kafka (non-blocking)
-4. **Game End** → Persist final state to PostgreSQL
+### **Player vs Player**
+1. Move received via WebSocket
+2. Validate against Redis GameSession
+3. Update int[][] board
+4. Broadcast to both players via WebSocket
+5. On completion → Save to PostgreSQL
 
-### **Player vs AI (HTTP)**
-1. **Player Move** → Update `Redis int[][]` board
-2. **AI Calculation** → Read 2D array, calculate optimal move
-3. **AI Move** → Update 2D array, return new board in HTTP response
-4. **Shadow Log** → Both moves logged to Kafka
-5. **Game End** → Persist to PostgreSQL
+### **Player vs AI**
+1. Player move via HTTP POST
+2. Validate and update Redis
+3. Request AI move from Django service
+4. Apply AI move to Redis
+5. Return updated state
+6. On completion → Save to PostgreSQL
 
 ## 📊 GameSession Object Structure
 
 ```java
-// In-Memory Cache Object
 public class GameSession {
-    private Long gameId;
-    private Long player1Id;
-    private Long player2Id; // null for AI games
+    private UUID gameId;
+    private GameType gameType;        // HUMAN_VS_HUMAN, HUMAN_VS_AI
+    private GameStatus status;        // IN_PROGRESS, COMPLETED, ABANDONED
+    private UUID player1Id;
+    private UUID player2Id;           // null for AI games
+    private UUID aiOpponentId;        // null for PvP games
     private int[][] board = new int[15][15];
-    private GameStatus status;
-    private int currentPlayer; // 1 or 2
+    private int currentPlayer;        // 1 or 2
     private int moveCount;
+    private String winnerType;        // PLAYER1, PLAYER2, AI, DRAW, NONE
+    private UUID winnerId;
+    private LocalDateTime startedAt;
+    private LocalDateTime endedAt;
     private LocalDateTime lastActivity;
-    
-    // Fast game logic methods
+
     public boolean isValidMove(int row, int col);
-    public boolean checkWinCondition(int row, int col, int player);
+    public boolean checkIfBoardFull();
     public void makeMove(int row, int col, int player);
+    public void switchPlayer();
 }
 ```
 
-## 🔄 Serialization Strategy
+## 🔄 Serialization
 
-### **Cache ↔ JSON Conversion**
+### **Redis Storage**
+GameSession objects serialized to JSON using Jackson ObjectMapper:
+- Stored with key pattern: `game:session:{UUID}`
+- TTL set to 2 hours (7200 seconds)
+- Automatic expiration prevents memory leaks
+
+### **PostgreSQL Storage**
 ```java
-// For Kafka logging and HTTP responses
-ObjectMapper mapper = new ObjectMapper();
-
-// Serialize: int[][] → JSON string
-String boardJson = mapper.writeValueAsString(board);
-// Result: "[[0,1,0,0...],[0,2,1,0...],...]"
-
-// Deserialize: JSON → int[][]  
-int[][] board = mapper.readValue(boardJson, int[][].class);
+// int[][] board → JSONB for database storage
+String boardJson = objectMapper.writeValueAsString(session.getBoard());
+game.setFinalBoardState(boardJson);
 ```
 
-### **Database Storage**
+### **Database Schema**
 ```sql
--- games table
-CREATE TABLE games (
-    id BIGSERIAL PRIMARY KEY,
-    player1_id BIGINT,
-    player2_id BIGINT, -- NULL for AI games
-    final_board_state TEXT, -- JSON string
-    winner_id BIGINT,
-    status VARCHAR(20),
-    created_at TIMESTAMP,
-    completed_at TIMESTAMP
+CREATE TABLE game (
+    game_id UUID PRIMARY KEY,
+    game_type VARCHAR(20),
+    game_status VARCHAR(20),
+    player1_id UUID REFERENCES player(player_id),
+    player2_id UUID REFERENCES player(player_id),
+    ai_opponent_id UUID REFERENCES ai_opponent(ai_id),
+    winner_type VARCHAR(20),
+    winner_id UUID REFERENCES player(player_id),
+    total_moves INTEGER,
+    started_at TIMESTAMP WITH TIME ZONE,
+    ended_at TIMESTAMP WITH TIME ZONE,
+    final_board_state JSONB,
+    move_sequence JSONB,  -- [[row, col, player], ...]
+    game_duration_seconds INTEGER
 );
 
--- Individual moves for replay/analytics
-CREATE TABLE game_moves (
-    id BIGSERIAL PRIMARY KEY,
-    game_id BIGINT REFERENCES games(id),
-    player_id BIGINT, -- NULL for AI moves
-    row INTEGER,
-    col INTEGER,
+CREATE TABLE game_move (
+    move_id UUID PRIMARY KEY,
+    game_id UUID REFERENCES game(game_id),
     move_number INTEGER,
-    is_ai_move BOOLEAN DEFAULT FALSE,
-    timestamp TIMESTAMP
+    player_type VARCHAR(20),
+    player_id UUID REFERENCES player(player_id),
+    ai_opponent_id UUID REFERENCES ai_opponent(ai_id),
+    board_x INTEGER,
+    board_y INTEGER,
+    stone_color VARCHAR(20),
+    move_timestamp TIMESTAMP WITH TIME ZONE
 );
 ```
 
-## 🚀 Performance Benefits
+## 🚀 Performance
 
-### **Why This Architecture Works**
+### **Why This Works**
 
-1. **Ultra-Fast Gameplay**
-   - In-memory 2D array operations: ~1-5ms
-   - No database I/O during active gameplay
-   - Immediate WebSocket broadcasting
+1. **Fast Gameplay**
+   - In-memory operations in Redis
+   - No database writes during active play
+   - WebSocket broadcasting for instant updates
 
-2. **Complete Audit Trail**
-   - Every move logged to Kafka in real-time
-   - Can replay entire games from event stream
-   - Analytics and anti-cheat processing
+2. **Scalable Storage**
+   - Database writes only on completion
+   - Redis TTL prevents memory leaks
+   - Separate hot/cold storage paths
 
-3. **Scalable Persistence**
-   - Database writes only on game completion
-   - Bulk move insertion from Kafka consumers
-   - Separate read/write workloads
-
-4. **Memory Efficiency**
+3. **Memory Efficient**
    - 15×15 int array = ~900 bytes per game
-   - Redis can handle 10K+ concurrent games easily
-   - Auto-expiry prevents memory leaks
+   - Redis handles thousands of concurrent games
+   - Automatic cleanup after 2 hours
 
 ## 💡 Implementation Notes
 
@@ -507,25 +531,25 @@ int centerRow = 7, centerCol = 7;
 board[centerRow][centerCol] = 1; // First move at center
 ```
 
-### **Win Detection Optimization**
-- Only check win condition around the last placed stone
-- Check 4 directions: horizontal, vertical, 2 diagonals
-- Short-circuit on first 5-in-a-row found
+### **Win Detection**
+- Check only around last placed stone
+- Four directions: horizontal, vertical, two diagonals
+- Count consecutive stones in each direction
+- Return true if count ≥ 5
 
-This strategy gives you **real-time performance** for gameplay while maintaining **complete data integrity** and **comprehensive analytics** through the Kafka event stream.
+Implementation in `GameService.checkWinCondition()` at line 214.
 
-## 🐳 Docker Multi-Service Setup
+## 🐳 Docker Setup
 
-The application uses Docker Compose to orchestrate multiple services:
+Services orchestrated with Docker Compose:
 
 ```yaml
-# docker-compose.yml
 services:
   postgres:
-    image: postgres:17
+    image: postgres:15-alpine
     ports: ["5432:5432"]
     environment:
-      POSTGRES_DB: gomoku
+      POSTGRES_DB: gomoku_db
       POSTGRES_USER: gomoku_user
       POSTGRES_PASSWORD: gomoku_password
 
@@ -533,46 +557,44 @@ services:
     image: redis:7-alpine
     ports: ["6379:6379"]
 
-  kafka:
-    image: confluentinc/cp-kafka:latest
-    ports: ["9092:9092"]
-    depends_on: [zookeeper]
-
-  zookeeper:
-    image: confluentinc/cp-zookeeper:latest
-
   backend:
     build: ./backend
     ports: ["8080:8080"]
-    depends_on: [postgres, redis, kafka, ai-service]
+    depends_on: [postgres, redis, ai-service]
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/gomoku
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/gomoku_db
       SPRING_REDIS_HOST: redis
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       AI_SERVICE_URL: http://ai-service:8000
 
   ai-service:
     build: ./ai-service
-    ports: ["8000:8000"]
-    volumes:
-      - ./ai-service/app/models:/app/models
+    ports: ["8001:8000"]
+    environment:
+      DJANGO_SETTINGS_MODULE: gomoku_ai.settings.development
 
-  frontend:
-    build: ./frontend
-    ports: ["5173:5173"]
-    depends_on: [backend]
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    ports: ["5050:80"]
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@gomoku.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    ports: ["8081:8081"]
 ```
 
-### Running the Stack
+### Running
 
 ```bash
 # Start all services
 docker-compose up -d
 
-# View logs
-docker-compose logs -f backend ai-service
+# Check logs
+docker logs gomoku-backend
+docker logs gomoku-ai-service
 
-# Stop all services
+# Stop services
 docker-compose down
 ```
 
@@ -582,33 +604,33 @@ docker-compose down
 
 ### Prerequisites
 
-- Java 17+
-- Node.js 18+
 - Docker & Docker Compose
-- Maven 3.8+
+- Java 21 (for local development)
+- Python 3.12 (for AI service development)
 
-### Local Development Setup
+### Quick Start
 
-1. **Start all services via Docker Compose:**
 ```bash
+# Clone repository
+git clone <repository-url>
+cd GomokuMatching
+
+# Start all services
 docker-compose up -d
-```
 
-2. **Verify services are running:**
-```bash
-docker-compose ps
-```
+# Wait for services to initialize (~30 seconds)
+docker-compose logs -f backend
 
-3. **Create Kafka topics:**
-```bash
-docker-compose exec kafka kafka-topics --create --topic game-move-made --bootstrap-server localhost:9092
-docker-compose exec kafka kafka-topics --create --topic match-created --bootstrap-server localhost:9092
+# Verify health
+curl http://localhost:8080/actuator/health
 ```
 
 ### Access Application
 
 - **Game UI**: http://localhost:5173
 - **Backend API**: http://localhost:8080
-- **AI Service**: http://localhost:8000
+- **AI Service (Django)**: http://localhost:8001
 - **Redis**: localhost:6379
 - **PostgreSQL**: localhost:5432 (gomoku_user/gomoku_password)
+- **pgAdmin**: http://localhost:5050 (admin@gomoku.com / admin)
+- **Redis Commander**: http://localhost:8081

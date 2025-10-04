@@ -1,11 +1,23 @@
 package com.gomokumatching.service;
 
+import com.gomokumatching.model.Game;
 import com.gomokumatching.model.GameSession;
+import com.gomokumatching.model.Player;
+import com.gomokumatching.model.AIOpponent;
+import com.gomokumatching.model.enums.GameStatusEnum;
+import com.gomokumatching.model.enums.GameTypeEnum;
+import com.gomokumatching.model.enums.WinnerTypeEnum;
+import com.gomokumatching.repository.GameRepository;
+import com.gomokumatching.repository.PlayerRepository;
+import com.gomokumatching.repository.AIOpponentRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 /**
@@ -23,6 +35,10 @@ import java.util.UUID;
 public class GameService {
 
     private final RedisService redisService;
+    private final GameRepository gameRepository;
+    private final PlayerRepository playerRepository;
+    private final AIOpponentRepository aiOpponentRepository;
+    private final ObjectMapper objectMapper;
 
     private static final int BOARD_SIZE = 15;
     private static final int WIN_CONDITION = 5; // 5 stones in a row
@@ -119,7 +135,7 @@ public class GameService {
             handleGameWin(session, playerId, playerNumber);
         }
         // Check draw condition
-        else if (session.isBoardFull()) {
+        else if (session.checkIfBoardFull()) {
             handleGameDraw(session);
         }
         // Continue game - switch player
@@ -168,6 +184,9 @@ public class GameService {
 
         redisService.updateGameSession(session);
         log.info("Game {} forfeited by player {}", gameId, playerId);
+
+        // Save forfeited game to PostgreSQL
+        saveCompletedGameToDatabase(session);
 
         return session;
     }
@@ -268,6 +287,9 @@ public class GameService {
 
         session.setEndedAt(LocalDateTime.now());
         log.info("Game {} won by player {} ({})", session.getGameId(), winnerId, session.getWinnerType());
+
+        // Save completed game to PostgreSQL
+        saveCompletedGameToDatabase(session);
     }
 
     /**
@@ -279,6 +301,95 @@ public class GameService {
         session.setWinnerId(null);
         session.setEndedAt(LocalDateTime.now());
         log.info("Game {} ended in a draw", session.getGameId());
+
+        // Save completed game to PostgreSQL
+        saveCompletedGameToDatabase(session);
+    }
+
+    /**
+     * Save completed game session from Redis to PostgreSQL for permanent storage.
+     * Converts in-memory GameSession to database Game entity.
+     */
+    private void saveCompletedGameToDatabase(GameSession session) {
+        try {
+            Game game = new Game();
+            game.setGameId(session.getGameId());
+
+            // Set game type
+            game.setGameType(session.getGameType() == GameSession.GameType.HUMAN_VS_HUMAN
+                    ? GameTypeEnum.HUMAN_VS_HUMAN
+                    : GameTypeEnum.HUMAN_VS_AI);
+
+            game.setGameStatus(GameStatusEnum.COMPLETED);
+
+            // Set players
+            Player player1 = playerRepository.findById(session.getPlayer1Id())
+                    .orElseThrow(() -> new IllegalStateException("Player1 not found: " + session.getPlayer1Id()));
+            game.setPlayer1(player1);
+
+            if (session.getPlayer2Id() != null) {
+                Player player2 = playerRepository.findById(session.getPlayer2Id())
+                        .orElseThrow(() -> new IllegalStateException("Player2 not found: " + session.getPlayer2Id()));
+                game.setPlayer2(player2);
+            }
+
+            if (session.getAiOpponentId() != null) {
+                AIOpponent aiOpponent = aiOpponentRepository.findById(session.getAiOpponentId())
+                        .orElseThrow(() -> new IllegalStateException("AI opponent not found: " + session.getAiOpponentId()));
+                game.setAiOpponent(aiOpponent);
+            }
+
+            // Set winner
+            String winnerTypeStr = session.getWinnerType();
+            if ("PLAYER1".equals(winnerTypeStr)) {
+                game.setWinnerType(WinnerTypeEnum.PLAYER1);
+                game.setWinner(player1);
+            } else if ("PLAYER2".equals(winnerTypeStr)) {
+                game.setWinnerType(WinnerTypeEnum.PLAYER2);
+                if (session.getWinnerId() != null) {
+                    Player winner = playerRepository.findById(session.getWinnerId())
+                            .orElseThrow(() -> new IllegalStateException("Winner not found: " + session.getWinnerId()));
+                    game.setWinner(winner);
+                }
+            } else if ("AI".equals(winnerTypeStr)) {
+                game.setWinnerType(WinnerTypeEnum.AI);
+                game.setWinner(null);
+            } else if ("DRAW".equals(winnerTypeStr)) {
+                game.setWinnerType(WinnerTypeEnum.DRAW);
+                game.setWinner(null);
+            } else {
+                game.setWinnerType(WinnerTypeEnum.NONE);
+                game.setWinner(null);
+            }
+
+            game.setTotalMoves(session.getMoveCount());
+
+            // Convert LocalDateTime to OffsetDateTime
+            game.setStartedAt(session.getStartedAt().atOffset(ZoneOffset.UTC));
+            game.setEndedAt(session.getEndedAt().atOffset(ZoneOffset.UTC));
+
+            // Calculate duration
+            long durationSeconds = java.time.Duration.between(session.getStartedAt(), session.getEndedAt()).getSeconds();
+            game.setGameDurationSeconds((int) durationSeconds);
+
+            // Store final board state as JSON
+            String boardJson = objectMapper.writeValueAsString(session.getBoard());
+            game.setFinalBoardState(boardJson);
+
+            // Store move sequence as JSON (if available)
+            if (session.getMoveHistory() != null && !session.getMoveHistory().isEmpty()) {
+                String moveSequenceJson = objectMapper.writeValueAsString(session.getMoveHistory());
+                game.setMoveSequence(moveSequenceJson);
+            }
+
+            // Save to database
+            gameRepository.save(game);
+            log.info("✅ Game {} saved to PostgreSQL: {} winner in {} moves",
+                    session.getGameId(), winnerTypeStr, session.getMoveCount());
+
+        } catch (Exception e) {
+            log.error("❌ Failed to save game {} to PostgreSQL: {}", session.getGameId(), e.getMessage(), e);
+        }
     }
 
     /**
