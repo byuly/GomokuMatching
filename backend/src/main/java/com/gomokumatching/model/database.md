@@ -1,9 +1,6 @@
-# Gomoku Database Schema 
+# DB schema
 
-## Overview
-Minimal PostgreSQL schema for Gomoku supporting real-time gameplay with Redis/Kafka hybrid architecture. PostgreSQL stores **final persistence** only - active games live in Redis, events stream through Kafka.
-
-## 🏗️ Architecture Alignment
+## alignment
 
 ```plaintext
 Redis (Active Data)          Kafka (Event Stream)         PostgreSQL (Final Persistence)
@@ -12,7 +9,7 @@ Redis (Active Data)          Kafka (Event Stream)         PostgreSQL (Final Pers
 └── int[][] board cache
 ```
 
-## Entity Relationship Diagram
+## er diagram
 
 ```mermaid
 erDiagram
@@ -259,7 +256,7 @@ CREATE TABLE game_move (
 
 ---
 
-## Data Flow
+## how does data flow?
 
 ### Real-time Gameplay (Redis)
 ```plaintext
@@ -288,7 +285,7 @@ ORDER BY move_number ASC;
 
 ---
 
-## Indexes
+## available indexes for optimzation
 
 ```sql
 -- Player lookups
@@ -321,54 +318,3 @@ CREATE INDEX idx_move_board_position ON game_move(board_x, board_y);
 CREATE INDEX idx_move_timestamp ON game_move(move_timestamp);
 ```
 
----
-
-### Future analytics
-- `game_analytics` - Post-game analysis
-- `ai_model_performance` - AI tracking
-- `player_ai_matchup` - Player vs AI stats
-
----
-
-## Design Principles
-
-1. **PostgreSQL = Cold Storage**: Only final, queryable data
-2. **Redis = Hot Data**: Active games, matchmaking queue
-3. **Kafka = Event Log**: Complete audit trail for replay
-4. **Minimal Schema**: Only what's needed for core gameplay
-5. **Extensible**: Easy to add analytics tables later
-
----
-
-## Common Queries
-
-### Get Player Stats
-```sql
-SELECT p.username, ps.current_mmr, ps.wins, ps.losses
-FROM player p
-JOIN player_stats ps ON p.player_id = ps.player_id
-WHERE p.player_id = ?;
-```
-
-### Get Game History
-```sql
-SELECT g.*, p1.username as player1, p2.username as player2
-FROM game g
-JOIN player p1 ON g.player1_id = p1.player_id
-LEFT JOIN player p2 ON g.player2_id = p2.player_id
-WHERE g.player1_id = ? OR g.player2_id = ?
-ORDER BY g.ended_at DESC
-LIMIT 10;
-```
-
-### Replay Game
-```sql
-SELECT move_number, player_type, board_x, board_y, stone_color, move_timestamp
-FROM game_move
-WHERE game_id = ?
-ORDER BY move_number ASC;
-```
-
----
-
-This minimal schema supports full gameplay while keeping PostgreSQL focused on what it does best: relational queries and historical data.
