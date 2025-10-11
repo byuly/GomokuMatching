@@ -53,24 +53,23 @@ public class PlayerServiceImpl implements PlayerService {
     public void updateUsername(UUID playerId, String username) {
         logger.info("Updating username for player ID: {}", playerId);
 
-        // Check if new username already exists (exclude current player)
+        // check if new username already exists
         if (playerRepository.existsByUsername(username)) {
             Player existingPlayer = playerRepository.findByUsername(username)
                     .orElseThrow();
 
-            // If the username belongs to a different player, throw exception
+            // exception if username taken
             if (!existingPlayer.getPlayerId().equals(playerId)) {
                 throw new ResourceAlreadyExistsException(
                         "Username already taken: " + username
                 );
             }
 
-            // If it's the same player's current username, no update needed
             logger.debug("Username unchanged for player ID: {}", playerId);
             return;
         }
 
-        // Update username
+        // updating username
         Player player = getPlayerById(playerId);
         player.setUsername(username);
         playerRepository.save(player);

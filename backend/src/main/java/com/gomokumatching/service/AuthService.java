@@ -25,8 +25,6 @@ import java.time.OffsetDateTime;
 
 /**
  * Authentication service handling user registration and login.
- *
- * Security Features:
  * - BCrypt password hashing (work factor 12)
  * - Duplicate username/email validation
  * - Account status checking (active, suspended, deleted)
@@ -55,21 +53,21 @@ public class AuthService {
     public AuthResponse register(RegisterRequest request) {
         logger.info("Attempting to register user: {}", request.getUsername());
 
-        // Check if username already exists
+        // check if username already exists
         if (playerRepository.existsByUsername(request.getUsername())) {
             throw new ResourceAlreadyExistsException(
                     "Username already exists: " + request.getUsername()
             );
         }
 
-        // Check if email already exists
+        // check if email already exists
         if (playerRepository.existsByEmailIgnoreCase(request.getEmail())) {
             throw new ResourceAlreadyExistsException(
                     "Email already exists: " + request.getEmail()
             );
         }
 
-        // Create new player
+        // create new player
         Player player = new Player();
         player.setUsername(request.getUsername());
         player.setEmail(request.getEmail().toLowerCase());
@@ -77,13 +75,13 @@ public class AuthService {
         player.setActive(true);
         player.setAccountStatus(AccountStatusEnum.ACTIVE);
 
-        // Save player
+        // save player
         Player savedPlayer = playerRepository.save(player);
 
         logger.info("Successfully registered user: {} with ID: {}",
                 savedPlayer.getUsername(), savedPlayer.getPlayerId());
 
-        // Generate JWT tokens
+        // generate JWT tokens
         String accessToken = jwtTokenProvider.generateTokenFromUserId(savedPlayer.getPlayerId());
         String refreshToken = jwtTokenProvider.generateRefreshToken(savedPlayer.getPlayerId());
 
@@ -108,10 +106,10 @@ public class AuthService {
     public AuthResponse login(LoginRequest request) {
         logger.info("Attempting login for: {}", request.getUsernameOrEmail());
 
-        // Determine if input is email or username
+        // determine if input is email or username
         boolean isEmail = request.getUsernameOrEmail().contains("@");
 
-        // Find player
+        // find player
         Player player;
         if (isEmail) {
             player = playerRepository.findByEmailIgnoreCase(request.getUsernameOrEmail())
@@ -121,7 +119,7 @@ public class AuthService {
                     .orElseThrow(() -> new BadCredentialsException("Invalid username or password"));
         }
 
-        // Check account status
+        // check account status
         if (!player.isActive()) {
             throw new BadCredentialsException("Account is inactive");
         }
@@ -134,23 +132,22 @@ public class AuthService {
             throw new BadCredentialsException("Account has been deleted");
         }
 
-        // Authenticate using Spring Security
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
-                        player.getUsername(), // Always use username for authentication
+                        player.getUsername(), // use username for authentication
                         request.getPassword()
                 )
         );
 
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
-        // Update last login timestamp
+        // updating the last timestamp
         player.setLastLogin(OffsetDateTime.now());
         playerRepository.save(player);
 
         CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
 
-        // Generate JWT tokens
+        // generate new JWT token
         String accessToken = jwtTokenProvider.generateTokenFromUserId(userDetails.getId());
         String refreshToken = jwtTokenProvider.generateRefreshToken(userDetails.getId());
 

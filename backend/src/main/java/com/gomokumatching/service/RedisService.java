@@ -11,7 +11,6 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Redis service for managing game sessions and matchmaking queue.
- *
  * Features:
  * - Game session CRUD with TTL (2 hours)
  * - Matchmaking queue management (sorted set)
@@ -24,14 +23,10 @@ public class RedisService {
 
     private final RedisTemplate<String, Object> redisTemplate;
 
-    // Key prefixes for organization
+    // using prefixes for debugging and organizing
     private static final String GAME_SESSION_PREFIX = "game:session:";
     private static final String MATCHMAKING_QUEUE_KEY = "matchmaking:queue";
     private static final long GAME_SESSION_TTL_HOURS = 2;
-
-    // ===========================================
-    // GAME SESSION OPERATIONS
-    // ===========================================
 
     /**
      * Save game session to Redis with 2-hour TTL
@@ -61,7 +56,7 @@ public class RedisService {
      * Update existing game session (refresh TTL)
      */
     public void updateGameSession(GameSession session) {
-        saveGameSession(session); // Overwrites and refreshes TTL
+        saveGameSession(session); // overwrite and refresh ttl
         log.debug("Updated game session: {}", session.getGameId());
     }
 
@@ -93,7 +88,8 @@ public class RedisService {
     }
 
     // ===========================================
-    // MATCHMAKING QUEUE OPERATIONS (Sorted Set)
+    // for match making, use sorted sets in redis (NOT YET IMPLEMENTED)
+    // TODO: implement matchmaking logic in backend
     // ===========================================
 
     /**
@@ -126,7 +122,7 @@ public class RedisService {
      * Returns null if less than 2 players in queue
      */
     public UUID[] popTwoPlayersFromQueue() {
-        // Pop 2 members with lowest scores (oldest timestamps)
+        // pop 2 members with lowest scores (oldest timestamps)
         var popped = redisTemplate.opsForZSet().popMin(MATCHMAKING_QUEUE_KEY, 2);
 
         if (popped == null || popped.size() < 2) {
@@ -157,10 +153,6 @@ public class RedisService {
         Double score = redisTemplate.opsForZSet().score(MATCHMAKING_QUEUE_KEY, playerId.toString());
         return score != null;
     }
-
-    // ===========================================
-    // HELPER METHODS
-    // ===========================================
 
     /**
      * Generate Redis key for game session

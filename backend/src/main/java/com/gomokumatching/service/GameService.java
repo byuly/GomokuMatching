@@ -105,24 +105,24 @@ public class GameService {
      * @throws IllegalStateException if game is not in progress
      */
     public GameSession processMove(UUID gameId, UUID playerId, int row, int col) {
-        // Get game session from Redis
+        // first get game session from redis
         GameSession session = redisService.getGameSession(gameId);
         if (session == null) {
             throw new IllegalStateException("Game session not found: " + gameId);
         }
 
-        // Validate game state
+        // validating game state
         if (session.getStatus() != GameSession.GameStatus.IN_PROGRESS) {
             throw new IllegalStateException("Game is not in progress");
         }
 
-        // Determine which player this is (1 or 2)
+        // determining player 1 and 2, for turn checking
         int playerNumber = getPlayerNumber(session, playerId);
         if (playerNumber != session.getCurrentPlayer()) {
             throw new IllegalStateException("Not your turn");
         }
 
-        // Validate and make move
+        // validate the move
         if (!session.isValidMove(row, col)) {
             throw new IllegalArgumentException("Invalid move at position (" + row + ", " + col + ")");
         }
@@ -130,20 +130,22 @@ public class GameService {
         session.makeMove(row, col, playerNumber);
         log.debug("Player {} made move at ({}, {}) in game {}", playerId, row, col, gameId);
 
-        // Check win condition
+        // check win condition each move, but only around the rock placed, not the whole board
         if (checkWinCondition(session.getBoard(), row, col, playerNumber)) {
             handleGameWin(session, playerId, playerNumber);
         }
-        // Check draw condition
+
+        // possible to draw in this game, so want to end as draw when this happens
         else if (session.checkIfBoardFull()) {
             handleGameDraw(session);
         }
-        // Continue game - switch player
+
+        // continue the game after processing move, with switching curr player
         else {
             session.switchPlayer();
         }
 
-        // Update Redis
+        // updating redis with new game session
         redisService.updateGameSession(session);
 
         return session;
@@ -165,7 +167,6 @@ public class GameService {
             throw new IllegalStateException("Game session not found: " + gameId);
         }
 
-        // Determine opponent
         UUID opponentId;
         String winnerType;
 
@@ -185,7 +186,7 @@ public class GameService {
         redisService.updateGameSession(session);
         log.info("Game {} forfeited by player {}", gameId, playerId);
 
-        // Save forfeited game to PostgreSQL
+        // saving forfeited game like game is completed
         saveCompletedGameToDatabase(session);
 
         return session;
@@ -212,7 +213,6 @@ public class GameService {
      * @return true if player has 5 in a row
      */
     public boolean checkWinCondition(int[][] board, int row, int col, int player) {
-        // Check all 4 directions
         return checkDirection(board, row, col, player, 0, 1)  ||  // Horizontal
                checkDirection(board, row, col, player, 1, 0)  ||  // Vertical
                checkDirection(board, row, col, player, 1, 1)  ||  // Diagonal \
@@ -231,12 +231,12 @@ public class GameService {
      * @return true if 5 in a row found
      */
     private boolean checkDirection(int[][] board, int row, int col, int player, int dRow, int dCol) {
-        int count = 1; // Count the stone just placed
+        int count = 1; // the stone currently placed
 
-        // Check positive direction
+        // positive direction
         count += countStones(board, row, col, player, dRow, dCol);
 
-        // Check negative direction
+        // negative direction
         count += countStones(board, row, col, player, -dRow, -dCol);
 
         return count >= WIN_CONDITION;
@@ -268,7 +268,7 @@ public class GameService {
     }
 
     // ===========================================
-    // GAME STATE MANAGEMENT
+    // game state management helpers
     // ===========================================
 
     /**
@@ -288,7 +288,6 @@ public class GameService {
         session.setEndedAt(LocalDateTime.now());
         log.info("Game {} won by player {} ({})", session.getGameId(), winnerId, session.getWinnerType());
 
-        // Save completed game to PostgreSQL
         saveCompletedGameToDatabase(session);
     }
 
@@ -302,7 +301,6 @@ public class GameService {
         session.setEndedAt(LocalDateTime.now());
         log.info("Game {} ended in a draw", session.getGameId());
 
-        // Save completed game to PostgreSQL
         saveCompletedGameToDatabase(session);
     }
 
@@ -315,14 +313,12 @@ public class GameService {
             Game game = new Game();
             game.setGameId(session.getGameId());
 
-            // Set game type
             game.setGameType(session.getGameType() == GameSession.GameType.HUMAN_VS_HUMAN
                     ? GameTypeEnum.HUMAN_VS_HUMAN
                     : GameTypeEnum.HUMAN_VS_AI);
 
             game.setGameStatus(GameStatusEnum.COMPLETED);
 
-            // Set players
             Player player1 = playerRepository.findById(session.getPlayer1Id())
                     .orElseThrow(() -> new IllegalStateException("Player1 not found: " + session.getPlayer1Id()));
             game.setPlayer1(player1);
@@ -339,7 +335,6 @@ public class GameService {
                 game.setAiOpponent(aiOpponent);
             }
 
-            // Set winner
             String winnerTypeStr = session.getWinnerType();
             if ("PLAYER1".equals(winnerTypeStr)) {
                 game.setWinnerType(WinnerTypeEnum.PLAYER1);
@@ -364,26 +359,23 @@ public class GameService {
 
             game.setTotalMoves(session.getMoveCount());
 
-            // Convert LocalDateTime to OffsetDateTime
             game.setStartedAt(session.getStartedAt().atOffset(ZoneOffset.UTC));
             game.setEndedAt(session.getEndedAt().atOffset(ZoneOffset.UTC));
 
-            // Calculate duration
             long durationSeconds = java.time.Duration.between(session.getStartedAt(), session.getEndedAt()).getSeconds();
             game.setGameDurationSeconds((int) durationSeconds);
 
-            // Store final board state as JSON
+            // we are storing final board state as JSON
             String boardJson = objectMapper.writeValueAsString(session.getBoard());
             game.setFinalBoardState(boardJson);
 
-            // Store move sequence as JSON (if available)
+            // sequence of moves here for possible replay feature
             if (session.getMoveHistory() != null && !session.getMoveHistory().isEmpty()) {
                 String moveSequenceJson = objectMapper.writeValueAsString(session.getMoveHistory());
                 game.setMoveSequence(moveSequenceJson);
             }
 
-            // Save to database
-            gameRepository.save(game);
+            gameRepository.save(game); // to DB
             log.info("✅ Game {} saved to PostgreSQL: {} winner in {} moves",
                     session.getGameId(), winnerTypeStr, session.getMoveCount());
 
