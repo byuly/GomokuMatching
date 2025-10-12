@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * In-memory game session stored in Redis cache.
+ * In-memory game session stored in Redis cache, important
  *
  * Lifecycle:
  * - Created when game starts
@@ -112,9 +112,7 @@ public class GameSession implements Serializable {
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime endedAt;
 
-    // ===========================================
-    // GAME LOGIC HELPER METHODS
-    // ===========================================
+    // helper methods for game logic
 
     /**
      * Initialize a new 15x15 empty board
@@ -179,9 +177,9 @@ public class GameSession implements Serializable {
     }
 
     public enum GameStatus {
-        WAITING,        // Waiting for players
-        IN_PROGRESS,    // Game actively being played
-        COMPLETED,      // Game finished normally
-        ABANDONED       // Player disconnected/forfeited
+        WAITING,        // waiting for palyers
+        IN_PROGRESS,    // game actively being played
+        COMPLETED,      // when game finsihed normally
+        ABANDONED       // forfeit/disconenct scenario
     }
 }

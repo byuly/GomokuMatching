@@ -68,7 +68,6 @@ public class GameController {
 
         log.info("Create game request from player {}: type={}", player1Id, request.getGameType());
 
-        // Validate request
         if (!request.isValid() || !request.isGameTypeConsistent()) {
             throw new InvalidGameRequestException(
                 "Invalid game request. For PvP games, set player2Id. For PvAI games, set aiOpponentId."
@@ -128,10 +127,8 @@ public class GameController {
         log.info("Move request for game {}: player={}, row={}, col={}",
                 gameId, playerId, request.getRow(), request.getCol());
 
-        // Validate access
         authService.validatePlayerAccess(gameId, playerId);
 
-        // Process move
         GameSession session = gameService.processMove(
                 gameId,
                 playerId,
@@ -142,26 +139,26 @@ public class GameController {
         log.info("Move processed for game {}: moveCount={}, status={}",
                 gameId, session.getMoveCount(), session.getStatus());
 
-        // If game is PvAI and still ongoing, get AI move
+        // if game is PvAI and still ongoing, get AI move
         if (session.getGameType() == GameSession.GameType.HUMAN_VS_AI &&
             session.getStatus() == GameSession.GameStatus.IN_PROGRESS) {
 
             log.info("Getting AI move for game {}", gameId);
 
             try {
-                // Get AI move from Django service
+                // get from Django service
                 AIServiceClient.AIMoveResponse aiMove = aiServiceClient.getAIMove(
                     session.getBoard(),
                     session.getCurrentPlayer(),
-                    "medium"  // Default difficulty, can be made configurable
+                    "medium"  // TODO: make configurable
                 );
 
                 log.info("AI move for game {}: row={}, col={}", gameId, aiMove.getRow(), aiMove.getCol());
 
-                // Process AI move
+                // processing ai move
                 session = gameService.processMove(
                     gameId,
-                    session.getPlayer2Id(),  // AI is player 2
+                    session.getPlayer2Id(),  // AI will always be player 2
                     aiMove.getRow(),
                     aiMove.getCol()
                 );
@@ -171,8 +168,8 @@ public class GameController {
 
             } catch (AIServiceClient.AIServiceException e) {
                 log.error("AI service error for game {}: {}", gameId, e.getMessage());
-                // Don't fail the request, just return state after player move
-                // Frontend can retry or handle gracefully
+                // don't fail the request, just return state after player move
+                // make frontend can retry or handle gracefully
             }
         }
 
@@ -197,7 +194,6 @@ public class GameController {
 
         log.debug("Get game state request: game={}, player={}", gameId, playerId);
 
-        // Validate access and get session
         GameSession session = authService.getGameSessionWithAccess(gameId, playerId);
 
         if (session == null) {
@@ -227,10 +223,8 @@ public class GameController {
 
         log.info("Forfeit request: game={}, player={}", gameId, playerId);
 
-        // Validate access
         authService.validatePlayerAccess(gameId, playerId);
 
-        // Forfeit game
         GameSession session = gameService.forfeitGame(gameId, playerId);
 
         log.info("Game {} forfeited by player {}", gameId, playerId);
@@ -263,7 +257,7 @@ public class GameController {
         authService.validatePlayerAccess(gameId, playerId);
 
         // TODO Phase 5: Query GameMoveRepository for move history
-        // For now, return empty list (moves will be persisted via Kafka in Phase 5)
+        // for now just return empty list (moves will be persisted via Kafka when implemented)
 
         log.warn("Move history not yet implemented (Phase 5 - Kafka consumers)");
 

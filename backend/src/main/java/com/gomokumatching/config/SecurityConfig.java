@@ -52,18 +52,18 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                // Enable CORS
+                // enable CORS
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
 
-                // Disable CSRF for stateless API
+                // disable CSRF for stateless API
                 .csrf(csrf -> csrf.disable())
 
-                // Set session management to stateless (no server-side sessions)
+                // set session management to stateless (dont want server-side sessions)
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
 
-                // Configure authorization rules
+                // auth rules
                 .authorizeHttpRequests(authz -> authz
                         // Public endpoints - no authentication required
                         .requestMatchers(
@@ -74,14 +74,14 @@ public class SecurityConfig {
                                 "/error"
                         ).permitAll()
 
-                        // WebSocket endpoints (will be authenticated via WebSocket handshake)
+                        // webSocket endpoints (will be authenticated via WebSocket handshake)
                         .requestMatchers("/ws/**").permitAll()
 
-                        // All other endpoints require authentication
+                        // all other endpoints require authentication
                         .anyRequest().authenticated()
                 )
 
-                // Add JWT filter before standard authentication filter
+                // add JWT filter before standard authentication filter
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

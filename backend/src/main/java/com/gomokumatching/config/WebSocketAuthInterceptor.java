@@ -65,13 +65,13 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
                                     userDetails.getAuthorities()
                             );
 
-                    // Set user in STOMP session
+                    // set user in STOMP session
                     accessor.setUser(authentication);
 
                     log.debug("WebSocket authenticated for user: {}", userId);
                 } catch (Exception ex) {
                     log.error("WebSocket authentication failed", ex);
-                    // Don't set user - connection will proceed but @MessageMapping will fail authorization
+                    // don't set user - connection will proceed but @MessageMapping will fail authorization
                 }
             } else {
                 log.warn("WebSocket CONNECT without valid JWT token");
@@ -87,19 +87,19 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
      * Checks multiple possible locations for compatibility with different clients.
      */
     private String extractJwtFromHeaders(StompHeaderAccessor accessor) {
-        // Method 1: Authorization header (standard)
+        // authorization header (standard)
         String authHeader = accessor.getFirstNativeHeader("Authorization");
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             return authHeader.substring(7);
         }
 
-        // Method 2: Custom "token" header (for clients that can't set Authorization)
+        // cCustom "token" header (for clients that can't set Authorization)
         String tokenHeader = accessor.getFirstNativeHeader("token");
         if (tokenHeader != null && !tokenHeader.isEmpty()) {
             return tokenHeader;
         }
 
-        // Method 3: Check all native headers for any containing "Bearer "
+        // check all native headers for any containing "Bearer "
         List<String> authHeaders = accessor.getNativeHeader("Authorization");
         if (authHeaders != null) {
             for (String header : authHeaders) {

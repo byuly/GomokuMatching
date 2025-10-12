@@ -202,6 +202,7 @@ CREATE TABLE game (
     ended_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     final_board_state JSONB,  -- Final 15x15 int[][] as JSON
+    move_sequence JSONB,  -- Array of moves [[row, col, player], ...]
     game_duration_seconds INTEGER CHECK (game_duration_seconds >= 0),
 
     CONSTRAINT game_type_consistency CHECK (

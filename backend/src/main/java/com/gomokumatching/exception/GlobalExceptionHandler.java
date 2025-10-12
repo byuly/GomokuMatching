@@ -16,9 +16,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Global exception handler for REST controllers.
+ * Global exception handler for our REST controllers.
  *
- * Provides centralized error handling and consistent error responses.
+ * centralized error handling and consistent error responses.
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {

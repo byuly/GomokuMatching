@@ -376,6 +376,7 @@ public class GameService {
             }
 
             gameRepository.save(game); // to DB
+
             log.info("✅ Game {} saved to PostgreSQL: {} winner in {} moves",
                     session.getGameId(), winnerTypeStr, session.getMoveCount());
 

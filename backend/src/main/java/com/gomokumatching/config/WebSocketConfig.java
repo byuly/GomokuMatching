@@ -43,8 +43,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*")  // TODO: Configure proper CORS for production
-                .withSockJS();  // Enable SockJS fallback
+                .setAllowedOriginPatterns("*")  // TODO: Configure proper CORS for prod
+                .withSockJS();  // enabling fallback with SockJS
     }
 
     /**
@@ -61,17 +61,17 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
      */
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        // Enable simple in-memory message broker
-        // For production, consider RabbitMQ or ActiveMQ for horizontal scaling
+        // enable simple in-memory message broker
+        // consider RabbitMQ or ActiveMQ
         registry.enableSimpleBroker("/topic", "/user");
 
-        // Application destination prefix
-        // Client sends to: /app/game/{gameId}/move
-        // Mapped to: @MessageMapping("/game/{gameId}/move")
+        // application destination prefix
+        // client sends to: /app/game/{gameId}/move
+        // ,apped to: @MessageMapping("/game/{gameId}/move")
         registry.setApplicationDestinationPrefixes("/app");
 
-        // User destination prefix for user-specific messages
-        // Used for sending errors to specific users
+        // user destination prefix for user-specific messages
+        // used for sending errors to specific users
         registry.setUserDestinationPrefix("/user");
     }
 

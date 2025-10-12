@@ -68,17 +68,15 @@ public class GameWebSocketController {
             @Valid MakeMoveRequest request,
             Principal principal
     ) {
-        // Extract user ID from principal
+        // extract user id from principal
         UUID playerId = extractUserId(principal);
 
         log.info("WebSocket move: game={}, player={}, row={}, col={}",
                 gameId, playerId, request.getRow(), request.getCol());
 
-        // Validate access and turn
         authService.validatePlayerAccess(gameId, playerId);
         authService.validatePlayerTurn(gameId, playerId);
 
-        // Process move
         GameSession session = gameService.processMove(
                 gameId,
                 playerId,
@@ -89,7 +87,7 @@ public class GameWebSocketController {
         log.info("WebSocket move processed: game={}, moveCount={}, status={}",
                 gameId, session.getMoveCount(), session.getStatus());
 
-        // Return state (broadcast to all subscribers of /topic/game/{gameId})
+        // returning state(broadcast to all subscribers of /topic/game/{gameId})
         return GameStateResponse.fromGameSession(session);
     }
 
@@ -113,16 +111,14 @@ public class GameWebSocketController {
 
         log.info("WebSocket forfeit: game={}, player={}", gameId, playerId);
 
-        // Validate access
         authService.validatePlayerAccess(gameId, playerId);
 
-        // Forfeit game
         GameSession session = gameService.forfeitGame(gameId, playerId);
 
         log.info("WebSocket forfeit processed: game={}, winner={}",
                 gameId, session.getWinnerType());
 
-        // Return final state (broadcast to all subscribers)
+        // return final statee (broadcast to all subscribers)
         return GameStateResponse.fromGameSession(session);
     }
 
