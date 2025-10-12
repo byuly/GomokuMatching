@@ -58,10 +58,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String jwt = extractJwtFromRequest(request);
 
             if (jwt != null && jwtTokenProvider.validateToken(jwt)) {
+                // TODO: Check if token is blacklisted (for logout/refresh rotation)
+                // if (tokenBlacklistService.isTokenBlacklisted(jwt)) {
+                //     return;  // Token is blacklisted, don't authenticate
+                // }
+
                 UUID userId = jwtTokenProvider.getUserIdFromToken(jwt);
 
-                // load from db by is
-                // TODO: add caching for this
+                // load from db by id
+                // TODO: add caching for this (Redis cache for UserDetails)
                 UserDetails userDetails = userDetailsService.loadUserById(userId);
 
                 // create auth token

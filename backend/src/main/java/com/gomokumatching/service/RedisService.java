@@ -88,6 +88,22 @@ public class RedisService {
     }
 
     // ===========================================
+    // TOKEN BLACKLIST OPERATIONS
+    // TODO: Implement token blacklisting for logout and refresh token rotation
+    // ===========================================
+
+    // TODO: Add token blacklist methods
+    // public void blacklistToken(String token, long ttlSeconds) {
+    //     String tokenId = extractTokenId(token);  // Extract jti claim or use hash
+    //     redisTemplate.opsForValue().set("blacklist:token:" + tokenId, "revoked", ttlSeconds, TimeUnit.SECONDS);
+    // }
+    //
+    // public boolean isTokenBlacklisted(String token) {
+    //     String tokenId = extractTokenId(token);
+    //     return Boolean.TRUE.equals(redisTemplate.hasKey("blacklist:token:" + tokenId));
+    // }
+
+    // ===========================================
     // for match making, use sorted sets in redis (NOT YET IMPLEMENTED)
     // TODO: implement matchmaking logic in backend
     // ===========================================

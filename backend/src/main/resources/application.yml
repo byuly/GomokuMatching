@@ -55,7 +55,9 @@ spring:
 app:
   jwt:
     secret: ItsASuperSecretJwtKeyThatShouldBe512BitsLongForHMACSHA512PleaseChangeThisInProduction
-    expiration-ms: 86400000  # 24 hours for development (change to 900000 = 15 min in production)
+    expiration-ms: 86400000  # 24 hours for development
+    # TODO: For production, change to 900000 (15 min) - industry standard
+    # TODO: Create application-prod.yml with production-specific settings
     refresh-expiration-ms: 604800000  # 7 days
 
 # ===================================

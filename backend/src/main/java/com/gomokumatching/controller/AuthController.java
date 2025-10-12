@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.*;
  * Endpoints:
  * - POST /api/auth/register - Register new user
  * - POST /api/auth/login - Authenticate user
+ * TODO: Add POST /api/auth/refresh - Refresh access token using refresh token
+ * TODO: Add POST /api/auth/logout - Logout and blacklist tokens
  *
  * All endpoints are public (no authentication required).
  */
@@ -63,4 +65,21 @@ public class AuthController {
 
         return ResponseEntity.ok(response);
     }
+
+    // TODO: Implement refresh token endpoint
+    // @PostMapping("/refresh")
+    // public ResponseEntity<AuthResponse> refreshToken(@Valid @RequestBody RefreshTokenRequest request) {
+    //     // 1. Validate refresh token
+    //     // 2. Generate new access token + new refresh token (token rotation)
+    //     // 3. Blacklist old refresh token in Redis
+    //     // 4. Return new tokens
+    // }
+
+    // TODO: Implement logout endpoint
+    // @PostMapping("/logout")
+    // public ResponseEntity<Void> logout(@Valid @RequestBody LogoutRequest request) {
+    //     // 1. Blacklist access token in Redis
+    //     // 2. Blacklist refresh token in Redis
+    //     // 3. Return 200 OK
+    // }
 }
