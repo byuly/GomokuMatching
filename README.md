@@ -1,4 +1,5 @@
-# Gomoku Matched – Classic Strategy Board Game with AI Opponents
+# Gomoku Matched !
+## Classic Strategy Board Game with AI Opponents
 
 
 **Gomoku Matched** is a competitive, real-time strategy board game where two players face off to place five stones in a row on a grid. The game supports both human-vs-human matches and human-vs-AI matches, featuring machine learning-powered AI opponents with varying skill levels.
