@@ -4,7 +4,7 @@
 
 **Gomoku Matched** is a competitive, real-time strategy board game where two players face off to place five stones in a row on a grid. The game supports both human-vs-human matches and human-vs-AI matches, featuring machine learning-powered AI opponents with varying skill levels.
 
-Built with Spring Boot, Redis, PostgreSQL, and a Django-based AI service, the application delivers real-time gameplay with WebSocket support and persistent game history.
+Built with Spring Boot, Redis, PostgreSQL, and a Flask-based AI service, the application delivers real-time gameplay with WebSocket support and persistent game history.
 
 ## architecture!
 
@@ -104,8 +104,8 @@ Built with Spring Boot, Redis, PostgreSQL, and a Django-based AI service, the ap
 | **Authentication**       | JWT with Spring Security) | Token-based authentication                 |
 | **Real-Time Updates**    | Spring WebSockets (STOMP) | PvP game state broadcasting                |
 | **Active Game Cache**    | Redis                     | In-memory sessions with 2-hour TTL         |
-| **AI Opponent**          | Django + Python           | Microservice for move calculation          |
-| **AI Communication**     | HTTP REST                 | Spring Boot → Django                       |
+| **AI Opponent**          | Flask + Python            | Microservice for move calculation          |
+| **AI Communication**     | HTTP REST                 | Spring Boot → Flask                        |
 | **Database**             | PostgreSQL 15             | Player data, game history, statistics      |
 | **Containerization**     | Docker Compose            | Multi-service orchestration                |
 
@@ -143,8 +143,8 @@ Built with Spring Boot, Redis, PostgreSQL, and a Django-based AI service, the ap
 1. Player POST `/api/game/{gameId}/move` with row/col
 2. GameService processes player move (same validation)
 3. If game still in progress, request AI move:
-   - HTTP POST to Django service at `http://ai-service:8000/api/ai/move`
-   - Django loads model based on difficulty
+   - HTTP POST to Flask service at `http://ai-service:8000/api/ai/move`
+   - Flask loads model based on difficulty
    - Returns optimal move coordinates
 4. GameService processes AI move
 5. Return updated state to client
@@ -181,9 +181,9 @@ Each move is `[row, col, player]` where player is `1` (Player 1) or `2` (Player 
 
 ## ai service!
 
-Separate Django microservice handles AI move calculations:
+Separate python microservice handles AI move calculations:
 
-- **Django REST Framework**: HTTP endpoint for move requests
+- **Flask**: HTTP endpoint for move requests
 - **Isolated service**: AI logic decoupled from game server
 - **Future extensibility**: Ready for ML model integration
 - **Simple communication**: HTTP REST requests from Spring Boot
@@ -227,7 +227,7 @@ Separate Django microservice handles AI move calculations:
 ### **Player vs AI**
 1. Player move via HTTP POST
 2. Validate and update Redis
-3. Request AI move from Django service
+3. Request AI move from python service
 4. Apply AI move to Redis
 5. Return updated state
 6. On completion → Save to PostgreSQL

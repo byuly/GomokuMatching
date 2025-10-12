@@ -64,7 +64,7 @@ services:
     networks:
       - gomoku-net
 
-  # AI Service (Django) - Stateless AI calculations
+  # AI Service (Flask) - Stateless AI calculations using minimax
   ai-service:
     build:
       context: ./ai-service
@@ -73,18 +73,15 @@ services:
     ports:
       - "8001:8000"
     environment:
-      DJANGO_SETTINGS_MODULE: gomoku_ai.settings.development
-      ALLOWED_HOSTS: localhost,backend,ai-service
-      CORS_ORIGINS: http://localhost:8080,http://backend:8080
-    volumes:
-      - ai_models:/app/models
-      - ai_logs:/app/logs
+      FLASK_APP: app.py
+      FLASK_ENV: production
+      PYTHONUNBUFFERED: 1
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/"]
       interval: 10s
-      timeout: 10s
-      retries: 10
-      start_period: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - gomoku-net
 
@@ -144,8 +141,6 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  ai_models:
-  ai_logs:
   pgadmin_data:
 
 networks:
