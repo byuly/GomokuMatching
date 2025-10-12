@@ -33,10 +33,10 @@ public class JwtTokenProvider {
     @Value("${app.jwt.secret}")
     private String jwtSecret;
 
-    @Value("${app.jwt.expiration-ms:900000}") // Default 15 minutes
+    @Value("${app.jwt.expiration-ms:900000}") // default 15 minutes
     private long jwtExpirationMs;
 
-    @Value("${app.jwt.refresh-expiration-ms:604800000}") // Default 7 days
+    @Value("${app.jwt.refresh-expiration-ms:604800000}") // default 7 days
     private long jwtRefreshExpirationMs;
 
     private SecretKey key;
@@ -47,8 +47,8 @@ public class JwtTokenProvider {
      */
     @PostConstruct
     public void init() {
-        // Generate secure key from secret string
-        // For production: use a properly generated 512-bit secret
+        // generate secure key from secret string
+        // TODO: use a properly generated 512-bit secret
         byte[] keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
         this.key = Keys.hmacShaKeyFor(keyBytes);
     }

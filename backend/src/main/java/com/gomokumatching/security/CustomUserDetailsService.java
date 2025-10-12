@@ -44,7 +44,7 @@ public class CustomUserDetailsService implements UserDetailsService {
 
     /**
      * Load user by email (alternative lookup).
-     * Useful for email-based login.
+     * TODO: add email based login
      *
      * @param email Email to load
      * @return UserDetails object containing user information

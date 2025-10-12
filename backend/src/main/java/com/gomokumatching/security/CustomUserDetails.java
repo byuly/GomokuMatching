@@ -44,8 +44,8 @@ public class CustomUserDetails implements UserDetails {
         this.isActive = player.isActive();
         this.accountStatus = player.getAccountStatus();
 
-        // Default role for all users
-        // In future, can be extended to support multiple roles
+        // now we have a default role for each user
+        // TODO: add support for multiple roles
         this.authorities = Collections.singletonList(
             new SimpleGrantedAuthority("ROLE_USER")
         );

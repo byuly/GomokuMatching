@@ -60,11 +60,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (jwt != null && jwtTokenProvider.validateToken(jwt)) {
                 UUID userId = jwtTokenProvider.getUserIdFromToken(jwt);
 
-                // Load user details from database by ID
-                // Note: In high-traffic scenarios, consider caching this
+                // load from db by is
+                // TODO: add caching for this
                 UserDetails userDetails = userDetailsService.loadUserById(userId);
 
-                // Create authentication token
+                // create auth token
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(
                                 userDetails,
@@ -76,15 +76,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         new WebAuthenticationDetailsSource().buildDetails(request)
                 );
 
-                // Set authentication in security context
                 SecurityContextHolder.getContext().setAuthentication(authentication);
 
                 logger.debug("Set authentication for user: {}", userId);
             }
         } catch (Exception ex) {
             logger.error("Could not set user authentication in security context", ex);
-            // Don't throw exception - let the request continue without authentication
-            // Spring Security will handle unauthorized access in the controller layer
+            // request will continue without authentication since spring security will handle
+            // in the controller layer
         }
 
         filterChain.doFilter(request, response);
