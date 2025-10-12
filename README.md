@@ -214,7 +214,7 @@ Separate Django microservice handles AI move calculations:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## 🎮 Data Flow
+## data flow overview~
 
 ### **Player vs Player**
 1. Move received via WebSocket

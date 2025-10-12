@@ -144,15 +144,6 @@ public class JwtTokenProvider {
     }
 
     /**
-     * Get expiration time in milliseconds.
-     *
-     * @return Expiration time
-     */
-    public long getExpirationMs() {
-        return jwtExpirationMs;
-    }
-
-    /**
      * Get expiration time in seconds (for response).
      *
      * @return Expiration time in seconds
