@@ -4,19 +4,20 @@ import com.gomokumatching.model.Game;
 import com.gomokumatching.model.GameSession;
 import com.gomokumatching.model.Player;
 import com.gomokumatching.model.AIOpponent;
+import com.gomokumatching.model.dto.kafka.GameMoveEvent;
 import com.gomokumatching.model.enums.GameStatusEnum;
 import com.gomokumatching.model.enums.GameTypeEnum;
 import com.gomokumatching.model.enums.WinnerTypeEnum;
 import com.gomokumatching.repository.GameRepository;
 import com.gomokumatching.repository.PlayerRepository;
 import com.gomokumatching.repository.AIOpponentRepository;
+import com.gomokumatching.service.kafka.GameEventProducer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
 
@@ -28,6 +29,7 @@ import java.util.UUID;
  * - Process moves and validate them
  * - Detect win conditions (5 in a row)
  * - Manage game state in Redis
+ * - Publish game events to Kafka
  */
 @Service
 @Slf4j
@@ -39,6 +41,8 @@ public class GameService {
     private final PlayerRepository playerRepository;
     private final AIOpponentRepository aiOpponentRepository;
     private final ObjectMapper objectMapper;
+    private final GameEventProducer gameEventProducer;
+    private final PlayerStatsService playerStatsService;
 
     private static final int BOARD_SIZE = 15;
     private static final int WIN_CONDITION = 5; // 5 stones in a row
@@ -131,6 +135,9 @@ public class GameService {
         log.debug("{} made move at ({}, {}) in game {}",
                 playerId == null ? "AI" : "Player " + playerId, row, col, gameId);
 
+        // async publish move event to Kafka
+        publishMoveEvent(session, playerId, row, col, playerNumber);
+
         // check win condition each move, but only around the rock placed, not the whole board
         if (checkWinCondition(session.getBoard(), row, col, playerNumber)) {
             handleGameWin(session, playerId, playerNumber);
@@ -189,6 +196,15 @@ public class GameService {
 
         // saving forfeited game like game is completed
         saveCompletedGameToDatabase(session);
+
+        // update player stats
+        UUID winnerId = winnerType.equals("AI") ? null : opponentId;
+        playerStatsService.updateStatsAfterGame(
+                session.getPlayer1Id(),
+                session.getPlayer2Id(),
+                winnerId,
+                false
+        );
 
         return session;
     }
@@ -290,6 +306,14 @@ public class GameService {
         log.info("Game {} won by player {} ({})", session.getGameId(), winnerId, session.getWinnerType());
 
         saveCompletedGameToDatabase(session);
+
+        // update player stats
+        playerStatsService.updateStatsAfterGame(
+                session.getPlayer1Id(),
+                session.getPlayer2Id(),
+                winnerId,
+                false // not a draw
+        );
     }
 
     /**
@@ -303,6 +327,14 @@ public class GameService {
         log.info("Game {} ended in a draw", session.getGameId());
 
         saveCompletedGameToDatabase(session);
+
+        // update player stats
+        playerStatsService.updateStatsAfterGame(
+                session.getPlayer1Id(),
+                session.getPlayer2Id(),
+                null, // no winner
+                true // is a draw
+        );
     }
 
     /**
@@ -400,6 +432,44 @@ public class GameService {
             return 2;
         } else {
             throw new IllegalArgumentException("Player " + playerId + " is not in this game");
+        }
+    }
+
+    /**
+     * Publish game move event to Kafka.
+     *
+     * Creates and publishes a GameMoveEvent for analytics and replay.
+     * Async execution via GameEventProducer ensures this doesn't block game flow.
+     *
+     * @param session Current game session (after move is made)
+     * @param playerId Player ID (null for AI)
+     * @param row Board row (0-14)
+     * @param col Board column (0-14)
+     * @param playerNumber Player number (1 or 2)
+     */
+    private void publishMoveEvent(GameSession session, UUID playerId, int row, int col, int playerNumber) {
+        try {
+            String playerType = (playerId == null) ? "AI" : "HUMAN";
+            String stoneColor = (playerNumber == 1) ? "BLACK" : "WHITE";
+
+            GameMoveEvent event = GameMoveEvent.of(
+                    session.getGameId(),
+                    session.getMoveCount(),
+                    playerType,
+                    playerId,
+                    session.getAiOpponentId(),
+                    row,
+                    col,
+                    stoneColor,
+                    null, // timeTakenMs - maybe we could implement this by tracking start time of move? would be cool
+                    session.getBoard()
+            );
+
+            gameEventProducer.publishGameMove(event);
+
+        } catch (Exception e) {
+            // log error but don't throw - Kafka failures shouldn't break game flow
+            log.error("Failed to publish move event for game {}: {}", session.getGameId(), e.getMessage());
         }
     }
 }

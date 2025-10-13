@@ -314,7 +314,7 @@ board[centerRow][centerCol] = 1; // First move at center
 
 ```bash
 # Clone repository
-git clone <repository-url>
+git clone https://github.com/byuly/GomokuMatching
 cd GomokuMatching
 
 # Start all services

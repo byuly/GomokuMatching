@@ -1,6 +1,8 @@
 package com.gomokumatching.service;
 
 import com.gomokumatching.model.GameSession;
+import com.gomokumatching.model.dto.kafka.MatchCreatedEvent;
+import com.gomokumatching.service.kafka.GameEventProducer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -20,6 +22,7 @@ import java.util.Map;
  * - Fixed delay scheduling (runs every 2 seconds after previous execution completes)
  * - Processes all possible matches in a single run
  * - Sends WebSocket notifications to matched players
+ * - Publishes match-created events to Kafka
  * - Handles errors gracefully without stopping scheduler
  *
  * Configuration:
@@ -33,6 +36,7 @@ public class MatchmakingScheduler {
 
     private final MatchmakingService matchmakingService;
     private final SimpMessagingTemplate messagingTemplate;
+    private final GameEventProducer gameEventProducer;
 
     // Statistics for monitoring
     private long totalMatchesCreated = 0;
@@ -86,6 +90,9 @@ public class MatchmakingScheduler {
 
                 // send WebSocket notifications to both players, to start game
                 notifyPlayersOfMatch(session);
+
+                // publish match-created event to Kafka (async)
+                publishMatchCreatedEvent(session);
 
                 log.info("✅ Match {}/{} created in this run: game={}",
                         matchesThisRun, maxMatchesPerRun, session.getGameId());
@@ -178,5 +185,30 @@ public class MatchmakingScheduler {
         totalSchedulerRuns = 0;
         lastRunTimestamp = 0;
         log.info("Matchmaking scheduler statistics reset");
+    }
+
+    /**
+     * Publish match-created event to Kafka.
+     *
+     * Creates and publishes a MatchCreatedEvent for analytics and monitoring.
+     * Async execution via GameEventProducer ensures this doesn't block matchmaking.
+     *
+     * @param session Created game session
+     */
+    private void publishMatchCreatedEvent(GameSession session) {
+        try {
+            MatchCreatedEvent event = MatchCreatedEvent.forMatchmaking(
+                    session.getGameId(),
+                    session.getPlayer1Id(),
+                    session.getPlayer2Id()
+            );
+
+            gameEventProducer.publishMatchCreated(event);
+
+        } catch (Exception e) {
+            // kafka failures shouldn't break matchmaking
+            log.error("Failed to publish match-created event for game {}: {}",
+                    session.getGameId(), e.getMessage());
+        }
     }
 }
