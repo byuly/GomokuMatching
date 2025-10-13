@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class RedisService {
 
-    private final RedisTemplate<String, Object> redisTemplate;
+    final RedisTemplate<String, Object> redisTemplate; // package-private for MatchmakingService
 
     // using prefixes for debugging and organizing
     private static final String GAME_SESSION_PREFIX = "game:session:";
@@ -102,11 +102,6 @@ public class RedisService {
     //     String tokenId = extractTokenId(token);
     //     return Boolean.TRUE.equals(redisTemplate.hasKey("blacklist:token:" + tokenId));
     // }
-
-    // ===========================================
-    // for match making, use sorted sets in redis (NOT YET IMPLEMENTED)
-    // TODO: implement matchmaking logic in backend
-    // ===========================================
 
     /**
      * Add player to matchmaking queue with timestamp as score

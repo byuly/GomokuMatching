@@ -136,6 +136,26 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handle player not found exceptions.
+     *
+     * @param ex PlayerNotFoundException
+     * @return 404 Not Found
+     */
+    @ExceptionHandler(PlayerNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handlePlayerNotFound(PlayerNotFoundException ex) {
+        logger.warn("Player not found: {}", ex.getMessage());
+
+        ErrorResponse response = ErrorResponse.builder()
+                .timestamp(OffsetDateTime.now())
+                .status(HttpStatus.NOT_FOUND.value())
+                .error("Player Not Found")
+                .message(ex.getMessage())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+    }
+
+    /**
      * Handle invalid move exceptions.
      *
      * @param ex InvalidMoveException

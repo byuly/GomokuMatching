@@ -215,6 +215,34 @@ Separate python microservice handles AI move calculations:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### **redis data structure example**
+
+```
+┌──────────────────────────────────────────────────────┐
+│           REDIS (Single Instance)                    │
+│           Port: 6379                                 │
+├──────────────────────────────────────────────────────┤
+│                                                      │
+│  STRING (Key-Value)                                  │
+│  ├─ game:session:uuid-1 → GameSession object        │
+│  ├─ game:session:uuid-2 → GameSession object        │
+│  └─ game:session:uuid-3 → GameSession object        │
+│                                                      │
+│  SORTED SET (Matchmaking Queue)                      │
+│  └─ matchmaking:queue                                │
+│      ├─ Score: 1697720400000, Member: player-a      │
+│      ├─ Score: 1697720405000, Member: player-b      │
+│      └─ Score: 1697720410000, Member: player-c      │
+│                                                      │
+│  (Future) STRING (Token Blacklist)                   │
+│  ├─ blacklist:token:abc123 → "revoked"             │
+│  └─ blacklist:token:def456 → "revoked"             │
+│                                                      │
+└──────────────────────────────────────────────────────┘
+```
+
+- single Redis instance handles both game sessions and matchmaking queue using different data structures.
+
 ## data flow overview~
 
 ### **Player vs Player**
