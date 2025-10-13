@@ -128,7 +128,8 @@ public class GameService {
         }
 
         session.makeMove(row, col, playerNumber);
-        log.debug("Player {} made move at ({}, {}) in game {}", playerId, row, col, gameId);
+        log.debug("{} made move at ({}, {}) in game {}",
+                playerId == null ? "AI" : "Player " + playerId, row, col, gameId);
 
         // check win condition each move, but only around the rock placed, not the whole board
         if (checkWinCondition(session.getBoard(), row, col, playerNumber)) {
@@ -387,11 +388,15 @@ public class GameService {
 
     /**
      * Determine which player number (1 or 2) this player ID represents
+     * For AI games, playerId can be null (representing the AI player 2)
      */
     private int getPlayerNumber(GameSession session, UUID playerId) {
-        if (playerId.equals(session.getPlayer1Id())) {
+        if (playerId == null && session.getGameType() == GameSession.GameType.HUMAN_VS_AI) {
+            // AI is always player 2 in PvAI games
+            return 2;
+        } else if (playerId != null && playerId.equals(session.getPlayer1Id())) {
             return 1;
-        } else if (playerId.equals(session.getPlayer2Id())) {
+        } else if (playerId != null && playerId.equals(session.getPlayer2Id())) {
             return 2;
         } else {
             throw new IllegalArgumentException("Player " + playerId + " is not in this game");
