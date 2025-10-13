@@ -7,7 +7,7 @@
 | pgAdmin | http://localhost:5050 | PostgreSQL GUI |
 | Redis Commander | http://localhost:8081 | Redis GUI |
 | Backend API | http://localhost:8080 | Spring Boot REST API |
-| AI Service | http://localhost:8001 | Flask AI endpoints |
+| AI Service | http://localhost:8000 | Flask AI endpoints |
 
 ---
 

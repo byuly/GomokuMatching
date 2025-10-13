@@ -1,15 +1,10 @@
-"""
-Minimax AI for Gomoku with pattern-based evaluation.
-Guaranteed to recognize threats and winning moves.
-"""
-
 from typing import List, Tuple, Optional
 import random
 
 
 class GomokuMinimaxAI:
     """
-    Minimax AI for 15x15 Gomoku with alpha-beta pruning.
+    AI for 15x15 Gomoku with alpha-beta pruning.
 
     Difficulty levels:
     - Easy: depth 1, simple evaluation
@@ -22,7 +17,7 @@ class GomokuMinimaxAI:
         self.board_size = board_size
         self.difficulty = difficulty.lower()
 
-        # Set search depth based on difficulty
+        # setting max depth based on the diff
         self.depth_map = {
             "easy": 1,
             "medium": 2,
@@ -31,7 +26,7 @@ class GomokuMinimaxAI:
         }
         self.max_depth = self.depth_map.get(self.difficulty, 2)
 
-        # Pattern scores for evaluation
+        # need patter scores for evaluation
         self.FIVE = 100000      # Win
         self.OPEN_FOUR = 10000  # Guaranteed win next turn
         self.FOUR = 5000        # Blocked four
@@ -41,49 +36,31 @@ class GomokuMinimaxAI:
         self.TWO = 10           # Weak potential
 
     def get_move(self, board: List[List[int]], current_player: int) -> Tuple[int, int]:
-        """
-        Get AI's best move using minimax with alpha-beta pruning.
 
-        Args:
-            board: 15x15 board (0=empty, 1=black, 2=white)
-            current_player: 1 or 2
-
-        Returns:
-            (row, col)
-        """
-        # First check for immediate win
         winning_move = self._find_winning_move(board, current_player)
         if winning_move:
             return winning_move
 
-        # Then check for blocking opponent's winning move
         opponent = 3 - current_player
         blocking_move = self._find_winning_move(board, opponent)
         if blocking_move:
             return blocking_move
 
-        # Use minimax for best move
         best_score = float('-inf')
         best_move = None
         alpha = float('-inf')
         beta = float('inf')
 
-        # Get candidate moves (only positions near existing stones)
         candidates = self._get_candidate_moves(board)
 
-        # If board is empty, play center
         if not candidates:
             return (7, 7)
 
-        # Evaluate each candidate
         for row, col in candidates:
-            # Make move
             board[row][col] = current_player
 
-            # Evaluate
             score = self._minimax(board, self.max_depth - 1, False, alpha, beta, current_player, opponent)
 
-            # Undo move
             board[row][col] = 0
 
             if score > best_score:
@@ -105,8 +82,6 @@ class GomokuMinimaxAI:
         opponent: int
     ) -> float:
         """
-        Minimax with alpha-beta pruning.
-
         Args:
             board: Current board state
             depth: Remaining search depth
@@ -119,12 +94,11 @@ class GomokuMinimaxAI:
         Returns:
             Evaluation score
         """
-        # Check terminal conditions
         winner = self._check_winner(board)
         if winner == ai_player:
-            return self.FIVE + depth * 100  # Prefer faster wins
+            return self.FIVE + depth * 100
         elif winner == opponent:
-            return -self.FIVE - depth * 100  # Avoid faster losses
+            return -self.FIVE - depth * 100
 
         if depth == 0:
             return self._evaluate_board(board, ai_player, opponent)
@@ -143,7 +117,7 @@ class GomokuMinimaxAI:
                 max_eval = max(max_eval, eval_score)
                 alpha = max(alpha, eval_score)
                 if beta <= alpha:
-                    break  # Beta cutoff
+                    break
             return max_eval
         else:
             min_eval = float('inf')
@@ -155,7 +129,7 @@ class GomokuMinimaxAI:
                 min_eval = min(min_eval, eval_score)
                 beta = min(beta, eval_score)
                 if beta <= alpha:
-                    break  # Alpha cutoff
+                    break
             return min_eval
 
     def _evaluate_board(self, board: List[List[int]], ai_player: int, opponent: int) -> float:
@@ -168,7 +142,6 @@ class GomokuMinimaxAI:
         """Calculate score for one player based on patterns"""
         score = 0
 
-        # Check all directions: horizontal, vertical, diagonal, anti-diagonal
         directions = [(0, 1), (1, 0), (1, 1), (1, -1)]
 
         for row in range(self.board_size):
@@ -195,29 +168,24 @@ class GomokuMinimaxAI:
         count = 0
         open_ends = 0
 
-        # Count stones in positive direction
         r, c = row, col
         while 0 <= r < self.board_size and 0 <= c < self.board_size and board[r][c] == player:
             count += 1
             r += dr
             c += dc
 
-        # Check if positive end is open
         if 0 <= r < self.board_size and 0 <= c < self.board_size and board[r][c] == 0:
             open_ends += 1
 
-        # Check negative direction
         r, c = row - dr, col - dc
         while 0 <= r < self.board_size and 0 <= c < self.board_size and board[r][c] == player:
             count += 1
             r -= dr
             c -= dc
 
-        # Check if negative end is open
         if 0 <= r < self.board_size and 0 <= c < self.board_size and board[r][c] == 0:
             open_ends += 1
 
-        # Score based on count and openness
         if count >= 5:
             return self.FIVE
         elif count == 4:
@@ -234,7 +202,6 @@ class GomokuMinimaxAI:
         for row in range(self.board_size):
             for col in range(self.board_size):
                 if board[row][col] == 0:
-                    # Try this move
                     board[row][col] = player
                     if self._check_winner(board) == player:
                         board[row][col] = 0
@@ -256,14 +223,12 @@ class GomokuMinimaxAI:
                 for dr, dc in directions:
                     count = 1
 
-                    # Check positive direction
                     r, c = row + dr, col + dc
                     while 0 <= r < self.board_size and 0 <= c < self.board_size and board[r][c] == player:
                         count += 1
                         r += dr
                         c += dc
 
-                    # Check negative direction
                     r, c = row - dr, col - dc
                     while 0 <= r < self.board_size and 0 <= c < self.board_size and board[r][c] == player:
                         count += 1
@@ -287,7 +252,6 @@ class GomokuMinimaxAI:
             for col in range(self.board_size):
                 if board[row][col] != 0:
                     has_stones = True
-                    # Add nearby empty positions
                     for dr in range(-radius, radius + 1):
                         for dc in range(-radius, radius + 1):
                             r, c = row + dr, col + dc
@@ -296,7 +260,6 @@ class GomokuMinimaxAI:
                                 board[r][c] == 0):
                                 candidates.add((r, c))
 
-        # If no stones, return center and nearby positions
         if not has_stones:
             center = self.board_size // 2
             for dr in range(-1, 2):

@@ -26,7 +26,7 @@ public class AIServiceClient {
 
     public AIServiceClient(
             RestTemplate restTemplate,
-            @Value("${ai.service.url:http://localhost:8001}") String aiServiceUrl) {
+            @Value("${ai.service.url:http://localhost:8000}") String aiServiceUrl) {
         this.restTemplate = restTemplate;
         this.aiServiceUrl = aiServiceUrl;
     }

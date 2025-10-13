@@ -71,7 +71,7 @@ services:
       dockerfile: Dockerfile
     container_name: gomoku-ai-service
     ports:
-      - "8001:8000"
+      - "8000:8000"
     environment:
       FLASK_APP: app.py
       FLASK_ENV: production

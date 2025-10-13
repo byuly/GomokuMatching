@@ -41,4 +41,4 @@ calculates the optimal move.
    ```bash
    python app.py
    ```
-   the service will be available at `http://localhost:8001`.
+   the service will be available at `http://localhost:8000`.
