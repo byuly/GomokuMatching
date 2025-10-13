@@ -69,80 +69,6 @@ public class AIServiceClient {
     }
 
     /**
-     * Validate if a move is legal.
-     *
-     * @param boardState Current board state
-     * @param row Row index
-     * @param col Column index
-     * @return true if move is valid
-     * @throws AIServiceException if communication fails
-     */
-    public boolean validateMove(int[][] boardState, int row, int col) {
-        String url = aiServiceUrl + "/api/validate/";
-
-        Map<String, Object> request = new HashMap<>();
-        request.put("board_state", boardState);
-        request.put("row", row);
-        request.put("col", col);
-
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
-
-            ResponseEntity<ValidateMoveResponse> response = restTemplate.postForEntity(
-                url, entity, ValidateMoveResponse.class
-            );
-
-            return response.getBody() != null && response.getBody().isValid();
-
-        } catch (RestClientException e) {
-            throw new AIServiceException("Failed to validate move: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Check if the game is over.
-     *
-     * @param boardState Current board state
-     * @param lastMoveRow Row of last move (nullable)
-     * @param lastMoveCol Column of last move (nullable)
-     * @return GameOverResponse with game status
-     * @throws AIServiceException if communication fails
-     */
-    public GameOverResponse checkGameOver(int[][] boardState, Integer lastMoveRow, Integer lastMoveCol) {
-        String url = aiServiceUrl + "/api/game-over/";
-
-        Map<String, Object> request = new HashMap<>();
-        request.put("board_state", boardState);
-        if (lastMoveRow != null) {
-            request.put("last_move_row", lastMoveRow);
-        }
-        if (lastMoveCol != null) {
-            request.put("last_move_col", lastMoveCol);
-        }
-
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
-
-            ResponseEntity<GameOverResponse> response = restTemplate.postForEntity(
-                url, entity, GameOverResponse.class
-            );
-
-            if (response.getBody() == null) {
-                throw new AIServiceException("AI service returned empty response");
-            }
-
-            return response.getBody();
-
-        } catch (RestClientException e) {
-            throw new AIServiceException("Failed to check game over: " + e.getMessage(), e);
-        }
-    }
-
-    /**
      * Check if AI service is healthy.
      *
      * @return true if service is responsive
@@ -179,38 +105,6 @@ public class AIServiceClient {
 
         public String getDifficulty() { return difficulty; }
         public void setDifficulty(String difficulty) { this.difficulty = difficulty; }
-    }
-
-    /**
-     * Response object for move validation.
-     */
-    public static class ValidateMoveResponse {
-        private boolean is_valid;
-        private String reason;
-
-        public boolean isValid() { return is_valid; }
-        public void setIs_valid(boolean is_valid) { this.is_valid = is_valid; }
-
-        public String getReason() { return reason; }
-        public void setReason(String reason) { this.reason = reason; }
-    }
-
-    /**
-     * Response object for game over check.
-     */
-    public static class GameOverResponse {
-        private boolean is_over;
-        private Integer winner;
-        private String reason;
-
-        public boolean isOver() { return is_over; }
-        public void setIs_over(boolean is_over) { this.is_over = is_over; }
-
-        public Integer getWinner() { return winner; }
-        public void setWinner(Integer winner) { this.winner = winner; }
-
-        public String getReason() { return reason; }
-        public void setReason(String reason) { this.reason = reason; }
     }
 
     /**

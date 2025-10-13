@@ -117,62 +117,6 @@ def get_ai_move():
         return jsonify({'error': 'Internal server error'}), 500
 
 
-@app.route('/api/validate/', methods=['POST'])
-def validate_move():
-    """
-    Validate if a move is legal (optional endpoint).
-    Backend already handles this, but provided for completeness.
-
-    Request JSON:
-    {
-        "board_state": [[...]],
-        "row": 7,
-        "col": 8
-    }
-
-    Response JSON:
-    {
-        "is_valid": true,
-        "reason": null
-    }
-    """
-    try:
-        data = request.get_json()
-
-        if not data:
-            return jsonify({'error': 'No JSON data provided'}), 400
-
-        board_state = data.get('board_state')
-        row = data.get('row')
-        col = data.get('col')
-
-        if board_state is None or row is None or col is None:
-            return jsonify({'error': 'Missing required fields'}), 400
-
-        # Check bounds
-        if not (0 <= row < 15 and 0 <= col < 15):
-            return jsonify({
-                'is_valid': False,
-                'reason': 'Move out of bounds'
-            }), 200
-
-        # Check if position is empty
-        if board_state[row][col] != 0:
-            return jsonify({
-                'is_valid': False,
-                'reason': 'Position already occupied'
-            }), 200
-
-        return jsonify({
-            'is_valid': True,
-            'reason': None
-        }), 200
-
-    except Exception as e:
-        app.logger.error(f"Error validating move: {str(e)}")
-        return jsonify({'error': 'Internal server error'}), 500
-
-
 @app.errorhandler(404)
 def not_found(error):
     """Handle 404 errors"""
