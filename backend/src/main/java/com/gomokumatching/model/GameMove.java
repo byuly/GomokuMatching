@@ -46,11 +46,8 @@ public class GameMove {
     @EqualsAndHashCode.Exclude
     private Player player;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "ai_opponent_id")
-    @ToString.Exclude
-    @EqualsAndHashCode.Exclude
-    private AIOpponent aiOpponent;
+    @Column(name = "ai_difficulty", length = 20)
+    private String aiDifficulty;
 
     @Column(name = "board_x", nullable = false)
     private int boardX;

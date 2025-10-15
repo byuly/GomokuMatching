@@ -12,9 +12,9 @@ import java.util.UUID;
 /**
  * Request DTO for creating a new game.
  *
- * Business Rule: Exactly ONE of player2Id or aiOpponentId must be set
+ * Business Rule: Exactly ONE of player2Id or aiDifficulty must be set
  * - player2Id set → Player vs Player game
- * - aiOpponentId set → Player vs AI game
+ * - aiDifficulty set → Player vs AI game
  */
 @Data
 @Builder
@@ -34,16 +34,17 @@ public class CreateGameRequest {
     private UUID player2Id;
 
     /**
-     * AI opponent ID (for PvAI games only, must be null for PvP games)
+     * AI difficulty (for PvAI games only, must be null for PvP games)
+     * Valid values: "EASY", "MEDIUM", "HARD", "EXPERT"
      */
-    private UUID aiOpponentId;
+    private String aiDifficulty;
 
     /**
      * Validate business rule: exactly one opponent type must be specified
      */
     public boolean isValid() {
         boolean hasPlayer2 = player2Id != null;
-        boolean hasAI = aiOpponentId != null;
+        boolean hasAI = aiDifficulty != null && !aiDifficulty.trim().isEmpty();
 
         // XOR: exactly one must be set
         return hasPlayer2 ^ hasAI;
@@ -54,9 +55,9 @@ public class CreateGameRequest {
      */
     public boolean isGameTypeConsistent() {
         if (gameType == GameSession.GameType.HUMAN_VS_HUMAN) {
-            return player2Id != null && aiOpponentId == null;
+            return player2Id != null && aiDifficulty == null;
         } else if (gameType == GameSession.GameType.HUMAN_VS_AI) {
-            return aiOpponentId != null && player2Id == null;
+            return aiDifficulty != null && !aiDifficulty.trim().isEmpty() && player2Id == null;
         }
         return false;
     }

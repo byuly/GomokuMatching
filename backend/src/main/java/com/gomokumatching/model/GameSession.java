@@ -56,9 +56,10 @@ public class GameSession implements Serializable {
     private UUID player2Id;
 
     /**
-     * AI opponent ID (null for PvP games)
+     * AI difficulty (null for PvP games)
+     * Valid values: "EASY", "MEDIUM", "HARD", "EXPERT"
      */
-    private UUID aiOpponentId;
+    private String aiDifficulty;
 
     /**
      * 15x15 game board

@@ -48,9 +48,10 @@ public class GameStateResponse {
     private UUID player2Id;
 
     /**
-     * AI opponent ID (null for PvP games)
+     * AI difficulty (null for PvP games)
+     * Valid values: "EASY", "MEDIUM", "HARD", "EXPERT"
      */
-    private UUID aiOpponentId;
+    private String aiDifficulty;
 
     /**
      * 15x15 game board (0=empty, 1=player1, 2=player2/AI)
@@ -110,7 +111,7 @@ public class GameStateResponse {
                 .status(session.getStatus())
                 .player1Id(session.getPlayer1Id())
                 .player2Id(session.getPlayer2Id())
-                .aiOpponentId(session.getAiOpponentId())
+                .aiDifficulty(session.getAiDifficulty())
                 .board(session.getBoard())
                 .currentPlayer(session.getCurrentPlayer())
                 .moveCount(session.getMoveCount())

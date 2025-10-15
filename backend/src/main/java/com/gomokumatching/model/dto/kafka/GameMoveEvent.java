@@ -58,9 +58,10 @@ public class GameMoveEvent implements Serializable {
     private UUID playerId;
 
     /**
-     * AI opponent ID (null if human move)
+     * AI difficulty (null if human move)
+     * Valid values: "EASY", "MEDIUM", "HARD", "EXPERT"
      */
-    private UUID aiOpponentId;
+    private String aiDifficulty;
 
     /**
      * Board X coordinate (0-14)
@@ -102,7 +103,7 @@ public class GameMoveEvent implements Serializable {
             int moveNumber,
             String playerType,
             UUID playerId,
-            UUID aiOpponentId,
+            String aiDifficulty,
             int boardX,
             int boardY,
             String stoneColor,
@@ -115,7 +116,7 @@ public class GameMoveEvent implements Serializable {
                 .moveNumber(moveNumber)
                 .playerType(playerType)
                 .playerId(playerId)
-                .aiOpponentId(aiOpponentId)
+                .aiDifficulty(aiDifficulty)
                 .boardX(boardX)
                 .boardY(boardY)
                 .stoneColor(stoneColor)

@@ -60,9 +60,10 @@ public class MatchCreatedEvent implements Serializable {
     private UUID player2Id;
 
     /**
-     * AI opponent ID (null for PvP games)
+     * AI difficulty (null for PvP games)
+     * Valid values: "EASY", "MEDIUM", "HARD", "EXPERT"
      */
-    private UUID aiOpponentId;
+    private String aiDifficulty;
 
     /**
      * Match creation source: MATCHMAKING, DIRECT_CHALLENGE, or AI_GAME
@@ -85,7 +86,7 @@ public class MatchCreatedEvent implements Serializable {
                 .gameType("HUMAN_VS_HUMAN")
                 .player1Id(player1Id)
                 .player2Id(player2Id)
-                .aiOpponentId(null)
+                .aiDifficulty(null)
                 .matchSource("MATCHMAKING")
                 .timestamp(OffsetDateTime.now())
                 .build();
@@ -101,7 +102,7 @@ public class MatchCreatedEvent implements Serializable {
                 .gameType("HUMAN_VS_HUMAN")
                 .player1Id(player1Id)
                 .player2Id(player2Id)
-                .aiOpponentId(null)
+                .aiDifficulty(null)
                 .matchSource("DIRECT_CHALLENGE")
                 .timestamp(OffsetDateTime.now())
                 .build();
@@ -110,14 +111,14 @@ public class MatchCreatedEvent implements Serializable {
     /**
      * Create event for PvAI game
      */
-    public static MatchCreatedEvent forAIGame(UUID gameId, UUID playerId, UUID aiOpponentId) {
+    public static MatchCreatedEvent forAIGame(UUID gameId, UUID playerId, String aiDifficulty) {
         return MatchCreatedEvent.builder()
                 .eventId(UUID.randomUUID())
                 .gameId(gameId)
                 .gameType("HUMAN_VS_AI")
                 .player1Id(playerId)
                 .player2Id(null)
-                .aiOpponentId(aiOpponentId)
+                .aiDifficulty(aiDifficulty)
                 .matchSource("AI_GAME")
                 .timestamp(OffsetDateTime.now())
                 .build();

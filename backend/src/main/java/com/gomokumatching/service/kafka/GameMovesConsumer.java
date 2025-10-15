@@ -1,17 +1,6 @@
 package com.gomokumatching.service.kafka;
 
-import com.gomokumatching.model.AIOpponent;
-import com.gomokumatching.model.Game;
-import com.gomokumatching.model.GameMove;
-import com.gomokumatching.model.Player;
 import com.gomokumatching.model.dto.kafka.GameMoveEvent;
-import com.gomokumatching.model.enums.PlayerTypeEnum;
-import com.gomokumatching.model.enums.StoneColorEnum;
-import com.gomokumatching.repository.AIOpponentRepository;
-import com.gomokumatching.repository.GameMoveRepository;
-import com.gomokumatching.repository.GameRepository;
-import com.gomokumatching.repository.PlayerRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -19,37 +8,45 @@ import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Kafka consumer for game move events.
+ * Kafka consumer for game move events - ANALYTICS ONLY.
  *
  * Listens to: game-move-made topic
  *
  * Responsibilities:
- * - Consume GameMoveEvent messages
- * - Persist moves to game_move table for replay functionality
- * - Handle duplicate events (idempotent via unique constraints)
- * - Log errors to DLQ on failures
+ * - Consume GameMoveEvent messages for real-time analytics
+ * - Track move patterns and statistics
+ * - Monitor game activity
+ * - Future: Feed data to analytics dashboards, metrics systems
+ *
+ * NOTE: This consumer does NOT persist moves to database.
+ * Move persistence is handled by GameService.saveMoveHistoryToDatabase()
+ * when games complete, reading from Redis session.moveHistory.
  *
  * Consumer Strategy:
- * - Manual offset commit (implicit via auto-commit in config)
+ * - Auto-commit offsets (configured in application.yml)
  * - 3 concurrent consumers (matches partition count)
- * - Retry on transient failures, DLQ on permanent failures
+ * - Lightweight processing (no DB writes)
  */
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class GameMovesConsumer {
 
-    private final GameMoveRepository gameMoveRepository;
-    private final GameRepository gameRepository;
-    private final PlayerRepository playerRepository;
-    private final AIOpponentRepository aiOpponentRepository;
-    private final ObjectMapper objectMapper;
+    // No repository dependencies needed for analytics-only consumer
 
     /**
-     * Consume game move events and persist to database.
+     * Consume game move events for analytics and monitoring.
+     *
+     * This consumer tracks move patterns in real-time but does NOT persist to database.
+     * Move persistence is handled by GameService.saveMoveHistoryToDatabase() when games complete.
+     *
+     * Future use cases:
+     * - Real-time analytics dashboards
+     * - Move pattern analysis (popular openings, etc.)
+     * - Live game monitoring
+     * - Metrics collection (moves per second, game activity)
      *
      * @param event GameMoveEvent from Kafka
      * @param partition Kafka partition number
@@ -60,95 +57,67 @@ public class GameMovesConsumer {
             groupId = "${spring.kafka.consumer.group-id}",
             containerFactory = "gameMoveEventKafkaListenerContainerFactory"
     )
-    @Transactional
     public void consumeGameMove(
             @Payload GameMoveEvent event,
             @Header(KafkaHeaders.RECEIVED_PARTITION) int partition,
             @Header(KafkaHeaders.OFFSET) long offset
     ) {
         try {
-            log.debug("Consuming move event: game={}, move={}, partition={}, offset={}",
-                    event.getGameId(), event.getMoveNumber(), partition, offset);
-
-            // convert event to entity
-            GameMove gameMove = convertEventToEntity(event);
-
-            // save to database (idempotent via unique constraints)
-            gameMoveRepository.save(gameMove);
-
-            log.info("✅ Persisted move: game={}, move={}, player={}, position=({},{})",
+            log.debug("📊 Analytics: Move event received - game={}, move={}, player={}, position=({},{}), partition={}, offset={}",
                     event.getGameId(),
                     event.getMoveNumber(),
                     event.getPlayerType(),
                     event.getBoardX(),
-                    event.getBoardY());
+                    event.getBoardY(),
+                    partition,
+                    offset);
 
-        } catch (org.springframework.dao.DataIntegrityViolationException e) {
-            // duplicate event (unique constraint violation) - this is normal in at-least-once delivery
-            log.debug("Duplicate move event (already persisted): game={}, move={}",
-                    event.getGameId(), event.getMoveNumber());
+            // Track analytics (no DB operations)
+            trackMoveAnalytics(event);
 
         } catch (Exception e) {
-            // let it propagate to trigger retry or DLQ
-            log.error("❌ Failed to process move event: game={}, move={}, error={}",
-                    event.getGameId(), event.getMoveNumber(), e.getMessage(), e);
-            throw new RuntimeException("Failed to process game move event", e);
+            // Log but don't throw - analytics failures shouldn't disrupt system
+            log.error("❌ Failed to process analytics for move event: game={}, move={}, error={}",
+                    event.getGameId(), event.getMoveNumber(), e.getMessage());
         }
     }
 
     /**
-     * Convert GameMoveEvent to GameMove entity.
+     * Track move analytics and patterns.
      *
-     * Fetches related entities (Game, Player, AI) from database.
+     * Currently logs move information. Future enhancements:
+     * - Aggregate move statistics (position frequency, opening patterns)
+     * - Track AI vs Human move patterns
+     * - Calculate move timing metrics
+     * - Feed data to external analytics systems
      *
-     * @param event Kafka event
-     * @return GameMove entity ready for persistence
+     * @param event Move event to analyze
      */
-    private GameMove convertEventToEntity(GameMoveEvent event) {
-        GameMove gameMove = new GameMove();
+    private void trackMoveAnalytics(GameMoveEvent event) {
+        // example analytics logging
+        // this would send to metrics systems like datadog in enterprise setting
 
-        // fetch game (must exist)
-        Game game = gameRepository.findById(event.getGameId())
-                .orElseThrow(() -> new IllegalStateException(
-                        "Game not found for move event: " + event.getGameId()));
-        gameMove.setGame(game);
+        log.info("📈 Move Analytics: game={}, move#{}, {}({}) → ({},{})",
+                event.getGameId(),
+                event.getMoveNumber(),
+                event.getPlayerType(),
+                event.getStoneColor(),
+                event.getBoardX(),
+                event.getBoardY());
 
-        // set move details
-        gameMove.setMoveNumber(event.getMoveNumber());
-        gameMove.setPlayerType(PlayerTypeEnum.valueOf(event.getPlayerType()));
-        gameMove.setBoardX(event.getBoardX());
-        gameMove.setBoardY(event.getBoardY());
-        gameMove.setStoneColor(StoneColorEnum.valueOf(event.getStoneColor()));
-        gameMove.setTimeTakenMs(event.getTimeTakenMs());
-
-        // set player or AI
-        if ("HUMAN".equals(event.getPlayerType())) {
-            if (event.getPlayerId() != null) {
-                Player player = playerRepository.findById(event.getPlayerId())
-                        .orElseThrow(() -> new IllegalStateException(
-                                "Player not found: " + event.getPlayerId()));
-                gameMove.setPlayer(player);
-                gameMove.setAiOpponent(null);
-            }
-        } else if ("AI".equals(event.getPlayerType())) {
-            if (event.getAiOpponentId() != null) {
-                AIOpponent aiOpponent = aiOpponentRepository.findById(event.getAiOpponentId())
-                        .orElseThrow(() -> new IllegalStateException(
-                                "AI opponent not found: " + event.getAiOpponentId()));
-                gameMove.setAiOpponent(aiOpponent);
-                gameMove.setPlayer(null);
-            }
+        // track position statistics
+        if (event.getMoveNumber() == 1) {
+            log.debug("Opening move at ({},{})", event.getBoardX(), event.getBoardY());
         }
 
-        // serialize board state as JSON
-        try {
-            String boardStateJson = objectMapper.writeValueAsString(event.getBoardStateAfterMove());
-            gameMove.setBoardStateAfterMove(boardStateJson);
-        } catch (Exception e) {
-            log.warn("Failed to serialize board state for move {}: {}", event.getMoveNumber(), e.getMessage());
-            gameMove.setBoardStateAfterMove(null);
+        // track AI difficulty usage
+        if ("AI".equals(event.getPlayerType()) && event.getAiDifficulty() != null) {
+            log.debug("AI move: difficulty={}", event.getAiDifficulty());
         }
 
-        return gameMove;
+        // TODO: Future analytics implementations:
+        // - metricsService.incrementMoveCounter(event.getPlayerType());
+        // - patternAnalyzer.trackOpening(event);
+        // - dashboardService.updateLiveStats(event);
     }
 }

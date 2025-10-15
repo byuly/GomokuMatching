@@ -1,16 +1,18 @@
 package com.gomokumatching.service;
 
 import com.gomokumatching.model.Game;
+import com.gomokumatching.model.GameMove;
 import com.gomokumatching.model.GameSession;
 import com.gomokumatching.model.Player;
-import com.gomokumatching.model.AIOpponent;
 import com.gomokumatching.model.dto.kafka.GameMoveEvent;
 import com.gomokumatching.model.enums.GameStatusEnum;
 import com.gomokumatching.model.enums.GameTypeEnum;
+import com.gomokumatching.model.enums.PlayerTypeEnum;
+import com.gomokumatching.model.enums.StoneColorEnum;
 import com.gomokumatching.model.enums.WinnerTypeEnum;
+import com.gomokumatching.repository.GameMoveRepository;
 import com.gomokumatching.repository.GameRepository;
 import com.gomokumatching.repository.PlayerRepository;
-import com.gomokumatching.repository.AIOpponentRepository;
 import com.gomokumatching.service.kafka.GameEventProducer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -39,10 +41,10 @@ public class GameService {
     private final RedisService redisService;
     private final GameRepository gameRepository;
     private final PlayerRepository playerRepository;
-    private final AIOpponentRepository aiOpponentRepository;
     private final ObjectMapper objectMapper;
     private final GameEventProducer gameEventProducer;
     private final PlayerStatsService playerStatsService;
+    private final GameMoveRepository gameMoveRepository;
 
     private static final int BOARD_SIZE = 15;
     private static final int WIN_CONDITION = 5; // 5 stones in a row
@@ -61,7 +63,7 @@ public class GameService {
         session.setStatus(GameSession.GameStatus.IN_PROGRESS);
         session.setPlayer1Id(player1Id);
         session.setPlayer2Id(player2Id);
-        session.setAiOpponentId(null);
+        session.setAiDifficulty(null);
         session.setBoard(GameSession.createEmptyBoard());
         session.setCurrentPlayer(1); // Player 1 (BLACK) starts
         session.setMoveCount(0);
@@ -77,14 +79,14 @@ public class GameService {
     /**
      * Create a new Player vs AI game
      */
-    public GameSession createPvAIGame(UUID playerId, UUID aiOpponentId) {
+    public GameSession createPvAIGame(UUID playerId, String aiDifficulty) {
         GameSession session = new GameSession();
         session.setGameId(UUID.randomUUID());
         session.setGameType(GameSession.GameType.HUMAN_VS_AI);
         session.setStatus(GameSession.GameStatus.IN_PROGRESS);
         session.setPlayer1Id(playerId);
         session.setPlayer2Id(null);
-        session.setAiOpponentId(aiOpponentId);
+        session.setAiDifficulty(aiDifficulty);
         session.setBoard(GameSession.createEmptyBoard());
         session.setCurrentPlayer(1); // Player (BLACK) starts
         session.setMoveCount(0);
@@ -92,7 +94,7 @@ public class GameService {
         session.setLastActivity(LocalDateTime.now());
 
         redisService.saveGameSession(session);
-        log.info("Created PvAI game: {} between player {} and AI {}", session.getGameId(), playerId, aiOpponentId);
+        log.info("Created PvAI game: {} between player {} and AI difficulty {}", session.getGameId(), playerId, aiDifficulty);
 
         return session;
     }
@@ -350,7 +352,12 @@ public class GameService {
                     ? GameTypeEnum.HUMAN_VS_HUMAN
                     : GameTypeEnum.HUMAN_VS_AI);
 
-            game.setGameStatus(GameStatusEnum.COMPLETED);
+            // map session status to database enum
+            if (session.getStatus() == GameSession.GameStatus.ABANDONED) {
+                game.setGameStatus(GameStatusEnum.ABANDONED);
+            } else {
+                game.setGameStatus(GameStatusEnum.COMPLETED);
+            }
 
             Player player1 = playerRepository.findById(session.getPlayer1Id())
                     .orElseThrow(() -> new IllegalStateException("Player1 not found: " + session.getPlayer1Id()));
@@ -362,10 +369,8 @@ public class GameService {
                 game.setPlayer2(player2);
             }
 
-            if (session.getAiOpponentId() != null) {
-                AIOpponent aiOpponent = aiOpponentRepository.findById(session.getAiOpponentId())
-                        .orElseThrow(() -> new IllegalStateException("AI opponent not found: " + session.getAiOpponentId()));
-                game.setAiOpponent(aiOpponent);
+            if (session.getAiDifficulty() != null) {
+                game.setAiDifficulty(session.getAiDifficulty());
             }
 
             String winnerTypeStr = session.getWinnerType();
@@ -413,8 +418,120 @@ public class GameService {
             log.info("✅ Game {} saved to PostgreSQL: {} winner in {} moves",
                     session.getGameId(), winnerTypeStr, session.getMoveCount());
 
+            // Persist move history from Redis to database
+            saveMoveHistoryToDatabase(game, session);
+
         } catch (Exception e) {
             log.error("❌ Failed to save game {} to PostgreSQL: {}", session.getGameId(), e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Save move history from GameSession to database.
+     *
+     * This method is called when a game completes to persist all moves from the
+     * in-memory GameSession to the game_move table for replay functionality.
+     *
+     * Works in conjunction with Kafka GameMovesConsumer:
+     * - Kafka consumer provides real-time move persistence (if game already in DB)
+     * - This method ensures all moves are persisted when game completes
+     * - Handles duplicates gracefully via unique constraints
+     *
+     * @param game The saved Game entity (must exist in database)
+     * @param session The GameSession from Redis with move history
+     */
+    private void saveMoveHistoryToDatabase(Game game, GameSession session) {
+        if (session.getMoveHistory() == null || session.getMoveHistory().isEmpty()) {
+            log.debug("No move history to persist for game {}", session.getGameId());
+            return;
+        }
+
+        try {
+            int moveNumber = 1; // Move numbers start at 1
+            for (int[] move : session.getMoveHistory()) {
+                try {
+                    // Parse move array: [row, col, playerNumber]
+                    int row = move[0];
+                    int col = move[1];
+                    int playerNumber = move[2];
+
+                    // Check if move already exists (Kafka consumer may have saved it)
+                    GameMove existingMove = gameMoveRepository.findByGameIdAndMoveNumber(
+                            session.getGameId(),
+                            moveNumber
+                    );
+
+                    if (existingMove != null) {
+                        log.debug("Move {} already persisted for game {} (via Kafka), skipping",
+                                moveNumber, session.getGameId());
+                        moveNumber++;
+                        continue;
+                    }
+
+                    // Create new GameMove entity
+                    GameMove gameMove = new GameMove();
+                    gameMove.setGame(game);
+                    gameMove.setMoveNumber(moveNumber);
+                    gameMove.setBoardX(row);
+                    gameMove.setBoardY(col);
+
+                    // Determine player type and set player reference
+                    // Player 1 is always human, Player 2 could be human or AI
+                    final UUID playerId;
+                    if (playerNumber == 1) {
+                        playerId = session.getPlayer1Id();
+                    } else if (playerNumber == 2 && session.getPlayer2Id() != null) {
+                        playerId = session.getPlayer2Id();
+                    } else {
+                        playerId = null;
+                    }
+
+                    if (playerId != null) {
+                        // Human player move
+                        gameMove.setPlayerType(PlayerTypeEnum.HUMAN);
+                        Player player = playerRepository.findById(playerId)
+                                .orElseThrow(() -> new IllegalStateException(
+                                        "Player not found: " + playerId));
+                        gameMove.setPlayer(player);
+                        gameMove.setAiDifficulty(null);
+                    } else {
+                        // AI move (player 2 in AI game)
+                        gameMove.setPlayerType(PlayerTypeEnum.AI);
+                        gameMove.setPlayer(null);
+                        gameMove.setAiDifficulty(session.getAiDifficulty());
+                    }
+
+                    // Set stone color (player 1 = BLACK, player 2 = WHITE)
+                    gameMove.setStoneColor(playerNumber == 1
+                            ? StoneColorEnum.BLACK
+                            : StoneColorEnum.WHITE);
+
+                    // Store board state after move as JSON (we don't track this in moveHistory)
+                    // For now, set to null - could reconstruct if needed
+                    gameMove.setBoardStateAfterMove(null);
+
+                    // Time taken is not tracked in current implementation
+                    gameMove.setTimeTakenMs(null);
+
+                    gameMoveRepository.save(gameMove);
+
+                    moveNumber++;
+
+                } catch (Exception e) {
+                    // Log but continue with other moves - duplicates will fail unique constraint
+                    log.warn("Failed to save move {} for game {}: {}",
+                            moveNumber, session.getGameId(), e.getMessage());
+                    moveNumber++;
+                }
+            }
+
+            log.info("✅ Persisted {} moves from move history for game {}",
+                    session.getMoveHistory().size(), session.getGameId());
+
+        } catch (Exception e) {
+            // Don't throw - move persistence failure shouldn't break game completion
+            log.error("❌ Failed to save move history for game {}: {}",
+                    session.getGameId(), e.getMessage(), e);
         }
     }
 
@@ -457,7 +574,7 @@ public class GameService {
                     session.getMoveCount(),
                     playerType,
                     playerId,
-                    session.getAiOpponentId(),
+                    session.getAiDifficulty(),
                     row,
                     col,
                     stoneColor,

@@ -42,6 +42,7 @@ public class GameController {
     private final GameService gameService;
     private final GameAuthorizationService authService;
     private final AIServiceClient aiServiceClient;
+    private final com.gomokumatching.repository.GameMoveRepository gameMoveRepository;
 
     /**
      * Create a new game (PvP or PvAI).
@@ -52,7 +53,7 @@ public class GameController {
      * {
      *   "gameType": "HUMAN_VS_HUMAN",  // or "HUMAN_VS_AI"
      *   "player2Id": "uuid",            // for PvP (null for AI)
-     *   "aiOpponentId": "uuid"          // for PvAI (null for PvP)
+     *   "aiDifficulty": "MEDIUM"        // for PvAI (null for PvP), valid values: EASY, MEDIUM, HARD, EXPERT
      * }
      *
      * @param request Game creation request
@@ -70,7 +71,7 @@ public class GameController {
 
         if (!request.isValid() || !request.isGameTypeConsistent()) {
             throw new InvalidGameRequestException(
-                "Invalid game request. For PvP games, set player2Id. For PvAI games, set aiOpponentId."
+                "Invalid game request. For PvP games, set player2Id. For PvAI games, set aiDifficulty."
             );
         }
 
@@ -88,9 +89,9 @@ public class GameController {
 
         } else {
             // Player vs AI
-            session = gameService.createPvAIGame(player1Id, request.getAiOpponentId());
-            log.info("Created PvAI game {}: player={}, ai={}",
-                    session.getGameId(), player1Id, request.getAiOpponentId());
+            session = gameService.createPvAIGame(player1Id, request.getAiDifficulty());
+            log.info("Created PvAI game {}: player={}, difficulty={}",
+                    session.getGameId(), player1Id, request.getAiDifficulty());
 
             return ResponseEntity
                     .status(HttpStatus.CREATED)
@@ -146,11 +147,15 @@ public class GameController {
             log.info("Getting AI move for game {}", gameId);
 
             try {
-                // get from Django service
+                // get from Django service - use difficulty from game session
+                String difficulty = session.getAiDifficulty() != null
+                    ? session.getAiDifficulty().toLowerCase()
+                    : "medium";
+
                 AIServiceClient.AIMoveResponse aiMove = aiServiceClient.getAIMove(
                     session.getBoard(),
                     session.getCurrentPlayer(),
-                    "medium"  // TODO: make configurable
+                    difficulty
                 );
 
                 log.info("AI move for game {}: row={}, col={}", gameId, aiMove.getRow(), aiMove.getCol());
@@ -237,12 +242,12 @@ public class GameController {
      *
      * GET /api/game/{gameId}/moves
      *
-     * Note: Only available for completed games (persisted to database).
-     * Active games don't have move history in DB yet (Phase 5 - Kafka consumers).
+     * Returns chronological list of all moves made in the game.
+     * Moves are persisted to database via Kafka consumers as the game progresses.
      *
      * @param gameId Game ID
      * @param currentUser Authenticated user
-     * @return 200 OK with list of moves
+     * @return 200 OK with list of moves in chronological order
      */
     @GetMapping("/{gameId}/moves")
     public ResponseEntity<List<MoveDTO>> getGameMoves(
@@ -253,14 +258,19 @@ public class GameController {
 
         log.debug("Get game moves request: game={}, player={}", gameId, playerId);
 
-        // Validate access
+        // validate player has access to this game
         authService.validatePlayerAccess(gameId, playerId);
 
-        // TODO Phase 5: Query GameMoveRepository for move history
-        // for now just return empty list (moves will be persisted via Kafka when implemented)
+        // query move history from database (persisted via Kafka consumers)
+        List<com.gomokumatching.model.GameMove> moves = gameMoveRepository.findByGameIdOrderByMoveNumber(gameId);
 
-        log.warn("Move history not yet implemented (Phase 5 - Kafka consumers)");
+        // convert entities to DTOs
+        List<MoveDTO> moveDTOs = moves.stream()
+                .map(MoveDTO::fromEntity)
+                .toList();
 
-        return ResponseEntity.ok(List.of());
+        log.info("Retrieved {} moves for game {}", moveDTOs.size(), gameId);
+
+        return ResponseEntity.ok(moveDTOs);
     }
 }

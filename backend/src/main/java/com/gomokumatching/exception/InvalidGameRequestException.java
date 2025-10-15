@@ -4,8 +4,8 @@ package com.gomokumatching.exception;
  * Exception thrown when game creation request is invalid.
  *
  * Reasons:
- * - Both player2Id and aiOpponentId are set
- * - Neither player2Id nor aiOpponentId is set
+ * - Both player2Id and aiDifficulty are set
+ * - Neither player2Id nor aiDifficulty is set
  * - Game type doesn't match opponent type
  *
  * HTTP Status: 400 Bad Request

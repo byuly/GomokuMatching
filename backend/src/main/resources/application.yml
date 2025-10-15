@@ -39,10 +39,10 @@ spring:
   # KAFKA CONFIGURATION
   # ===================================
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: kafka:9092
     consumer:
       group-id: gomoku-app
-      auto-offset-reset: latest
+      auto-offset-reset: earliest
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer

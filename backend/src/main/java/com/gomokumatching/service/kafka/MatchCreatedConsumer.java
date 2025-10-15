@@ -64,7 +64,7 @@ public class MatchCreatedConsumer {
                     event.getGameType(),
                     event.getMatchSource(),
                     event.getPlayer1Id(),
-                    event.getPlayer2Id() != null ? event.getPlayer2Id() : "AI-" + event.getAiOpponentId(),
+                    event.getPlayer2Id() != null ? event.getPlayer2Id() : "AI-" + event.getAiDifficulty(),
                     partition,
                     offset);
 

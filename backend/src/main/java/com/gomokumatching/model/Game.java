@@ -44,11 +44,8 @@ public class Game {
     @EqualsAndHashCode.Exclude
     private Player player2;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "ai_opponent_id")
-    @ToString.Exclude
-    @EqualsAndHashCode.Exclude
-    private AIOpponent aiOpponent;
+    @Column(name = "ai_difficulty", length = 20)
+    private String aiDifficulty;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "winner_type")

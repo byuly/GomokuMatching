@@ -22,19 +22,6 @@ CREATE TABLE player (
     account_status VARCHAR(20) DEFAULT 'ACTIVE' CHECK (account_status IN ('ACTIVE', 'SUSPENDED', 'DELETED'))
 );
 
--- AI_OPPONENT table
-CREATE TABLE ai_opponent (
-    ai_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name VARCHAR(100) NOT NULL,
-    difficulty_level VARCHAR(20) NOT NULL CHECK (difficulty_level IN ('EASY', 'MEDIUM', 'HARD', 'EXPERT')),
-    model_version VARCHAR(50) NOT NULL,
-    model_file_path VARCHAR(500) NOT NULL,
-    win_rate_target DECIMAL(5,4) NOT NULL CHECK (win_rate_target >= 0 AND win_rate_target <= 1),
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
 -- PLAYER_STATS table
 CREATE TABLE player_stats (
     stats_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -58,7 +45,7 @@ CREATE TABLE game (
     game_status VARCHAR(20) DEFAULT 'WAITING' CHECK (game_status IN ('WAITING', 'IN_PROGRESS', 'COMPLETED', 'ABANDONED')),
     player1_id UUID NOT NULL REFERENCES player(player_id) ON DELETE CASCADE,
     player2_id UUID REFERENCES player(player_id) ON DELETE CASCADE,
-    ai_opponent_id UUID REFERENCES ai_opponent(ai_id) ON DELETE SET NULL,
+    ai_difficulty VARCHAR(20) CHECK (ai_difficulty IN ('EASY', 'MEDIUM', 'HARD', 'EXPERT')),
     winner_type VARCHAR(20) DEFAULT 'NONE' CHECK (winner_type IN ('PLAYER1', 'PLAYER2', 'AI', 'DRAW', 'NONE')),
     winner_id UUID REFERENCES player(player_id) ON DELETE SET NULL,
     total_moves INTEGER DEFAULT 0 CHECK (total_moves >= 0),
@@ -69,8 +56,8 @@ CREATE TABLE game (
     move_sequence JSONB,
     game_duration_seconds INTEGER CHECK (game_duration_seconds >= 0),
     CONSTRAINT game_type_consistency CHECK (
-        (game_type = 'HUMAN_VS_HUMAN' AND player2_id IS NOT NULL AND ai_opponent_id IS NULL) OR
-        (game_type = 'HUMAN_VS_AI' AND player2_id IS NULL AND ai_opponent_id IS NOT NULL)
+        (game_type = 'HUMAN_VS_HUMAN' AND player2_id IS NOT NULL AND ai_difficulty IS NULL) OR
+        (game_type = 'HUMAN_VS_AI' AND player2_id IS NULL AND ai_difficulty IS NOT NULL)
     ),
     CONSTRAINT winner_consistency CHECK (
         (winner_type = 'PLAYER1' AND winner_id = player1_id) OR
@@ -88,7 +75,7 @@ CREATE TABLE game_move (
     move_number INTEGER NOT NULL CHECK (move_number > 0),
     player_type VARCHAR(20) NOT NULL CHECK (player_type IN ('HUMAN', 'AI')),
     player_id UUID REFERENCES player(player_id) ON DELETE CASCADE,
-    ai_opponent_id UUID REFERENCES ai_opponent(ai_id) ON DELETE CASCADE,
+    ai_difficulty VARCHAR(20) CHECK (ai_difficulty IN ('EASY', 'MEDIUM', 'HARD', 'EXPERT')),
     board_x INTEGER NOT NULL CHECK (board_x >= 0 AND board_x < 15),
     board_y INTEGER NOT NULL CHECK (board_y >= 0 AND board_y < 15),
     stone_color VARCHAR(20) NOT NULL CHECK (stone_color IN ('BLACK', 'WHITE')),
@@ -98,8 +85,8 @@ CREATE TABLE game_move (
     UNIQUE(game_id, move_number),
     UNIQUE(game_id, board_x, board_y),
     CONSTRAINT move_player_consistency CHECK (
-        (player_type = 'HUMAN' AND player_id IS NOT NULL AND ai_opponent_id IS NULL) OR
-        (player_type = 'AI' AND player_id IS NULL AND ai_opponent_id IS NOT NULL)
+        (player_type = 'HUMAN' AND player_id IS NOT NULL AND ai_difficulty IS NULL) OR
+        (player_type = 'AI' AND player_id IS NULL AND ai_difficulty IS NOT NULL)
     )
 );
 
@@ -110,9 +97,7 @@ CREATE INDEX idx_player_email ON player(email);
 CREATE INDEX idx_player_active ON player(is_active);
 CREATE INDEX idx_player_account_status ON player(account_status);
 
--- AI opponent indexes
-CREATE INDEX idx_ai_opponent_difficulty ON ai_opponent(difficulty_level);
-CREATE INDEX idx_ai_opponent_active ON ai_opponent(is_active);
+-- AI opponent indexes removed (table no longer exists)
 
 -- Player stats indexes
 CREATE INDEX idx_player_stats_player_id ON player_stats(player_id);
@@ -123,7 +108,7 @@ CREATE INDEX idx_game_status ON game(game_status);
 CREATE INDEX idx_game_type ON game(game_type);
 CREATE INDEX idx_game_player1 ON game(player1_id);
 CREATE INDEX idx_game_player2 ON game(player2_id);
-CREATE INDEX idx_game_ai_opponent ON game(ai_opponent_id);
+CREATE INDEX idx_game_ai_difficulty ON game(ai_difficulty);
 CREATE INDEX idx_game_created_at ON game(created_at);
 CREATE INDEX idx_game_winner ON game(winner_id);
 
@@ -146,15 +131,7 @@ $$ language 'plpgsql';
 CREATE TRIGGER update_player_stats_modified BEFORE UPDATE ON player_stats
     FOR EACH ROW EXECUTE FUNCTION update_modified_column();
 
-CREATE TRIGGER update_ai_opponent_modified BEFORE UPDATE ON ai_opponent
-    FOR EACH ROW EXECUTE FUNCTION update_modified_column();
-
--- Insert default AI opponents
-INSERT INTO ai_opponent (name, difficulty_level, model_version, model_file_path, win_rate_target) VALUES
-    ('Rookie Bot', 'EASY', 'v1.0', '/models/rookie_v1.0.pth', 0.3),
-    ('Challenger Bot', 'MEDIUM', 'v1.0', '/models/challenger_v1.0.pth', 0.5),
-    ('Expert Bot', 'HARD', 'v1.0', '/models/expert_v1.0.pth', 0.7),
-    ('Master Bot', 'EXPERT', 'v1.0', '/models/master_v1.0.pth', 0.85);
+-- AI opponent seeding removed (no longer needed - difficulty stored directly in games)
 
 -- Grant permissions to application user
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA gomoku TO gomoku_user;
