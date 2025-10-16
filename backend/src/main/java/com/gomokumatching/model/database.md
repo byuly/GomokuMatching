@@ -38,25 +38,13 @@ erDiagram
         timestamp last_updated
     }
 
-    AI_OPPONENT {
-        uuid ai_id PK
-        varchar name
-        varchar difficulty_level "EASY, MEDIUM, HARD, EXPERT"
-        varchar model_version
-        varchar model_file_path
-        decimal win_rate_target
-        boolean is_active
-        timestamp created_at
-        timestamp last_updated
-    }
-
     GAME {
         uuid game_id PK
         varchar game_type "HUMAN_VS_HUMAN, HUMAN_VS_AI"
         varchar game_status "WAITING, IN_PROGRESS, COMPLETED, ABANDONED"
         uuid player1_id FK
         uuid player2_id FK "nullable for AI games"
-        uuid ai_opponent_id FK "nullable for human games"
+        varchar ai_difficulty "EASY, MEDIUM, HARD, EXPERT"
         varchar winner_type "PLAYER1, PLAYER2, AI, DRAW, NONE"
         uuid winner_id FK "nullable"
         integer total_moves
@@ -73,7 +61,7 @@ erDiagram
         integer move_number
         varchar player_type "HUMAN, AI"
         uuid player_id FK "nullable if AI"
-        uuid ai_opponent_id FK "nullable if human"
+        varchar ai_difficulty "EASY, MEDIUM, HARD, EXPERT"
         integer board_x "0-14"
         integer board_y "0-14"
         varchar stone_color "BLACK, WHITE"
@@ -88,9 +76,6 @@ erDiagram
     PLAYER ||--o{ GAME : "plays as player2"
     PLAYER ||--o{ GAME : "wins"
     PLAYER ||--o{ GAME_MOVE : makes
-
-    AI_OPPONENT ||--o{ GAME : "plays in"
-    AI_OPPONENT ||--o{ GAME_MOVE : makes
 
     GAME ||--o{ GAME_MOVE : contains
 ```
@@ -147,37 +132,7 @@ CREATE TABLE player_stats (
 
 ---
 
-### 3. AI_OPPONENT
-**AI bot configurations for Python microservice**
-
-- **Primary Key**: `ai_id` (UUID)
-- **Purpose**: PyTorch model metadata, difficulty levels
-
-```sql
-CREATE TABLE ai_opponent (
-    ai_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name VARCHAR(100) NOT NULL,
-    difficulty_level VARCHAR(20) NOT NULL
-        CHECK (difficulty_level IN ('EASY', 'MEDIUM', 'HARD', 'EXPERT')),
-    model_version VARCHAR(50) NOT NULL,
-    model_file_path VARCHAR(500) NOT NULL,
-    win_rate_target DECIMAL(5,4) NOT NULL
-        CHECK (win_rate_target >= 0 AND win_rate_target <= 1),
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-**Default AI Opponents:**
-- Rookie Bot (EASY) - 30% win rate
-- Challenger Bot (MEDIUM) - 50% win rate
-- Expert Bot (HARD) - 70% win rate
-- Master Bot (EXPERT) - 85% win rate
-
----
-
-### 4. GAME
+### 3. GAME
 **Completed game records**
 
 - **Primary Key**: `game_id` (UUID)
@@ -193,7 +148,7 @@ CREATE TABLE game (
         CHECK (game_status IN ('WAITING', 'IN_PROGRESS', 'COMPLETED', 'ABANDONED')),
     player1_id UUID NOT NULL REFERENCES player(player_id) ON DELETE CASCADE,
     player2_id UUID REFERENCES player(player_id) ON DELETE CASCADE,  -- NULL for AI
-    ai_opponent_id UUID REFERENCES ai_opponent(ai_id) ON DELETE SET NULL,  -- NULL for PvP
+    ai_difficulty VARCHAR(20) CHECK (ai_difficulty IN ('EASY', 'MEDIUM', 'HARD', 'EXPERT')),
     winner_type VARCHAR(20) DEFAULT 'NONE'
         CHECK (winner_type IN ('PLAYER1', 'PLAYER2', 'AI', 'DRAW', 'NONE')),
     winner_id UUID REFERENCES player(player_id) ON DELETE SET NULL,
@@ -206,8 +161,8 @@ CREATE TABLE game (
     game_duration_seconds INTEGER CHECK (game_duration_seconds >= 0),
 
     CONSTRAINT game_type_consistency CHECK (
-        (game_type = 'HUMAN_VS_HUMAN' AND player2_id IS NOT NULL AND ai_opponent_id IS NULL) OR
-        (game_type = 'HUMAN_VS_AI' AND player2_id IS NULL AND ai_opponent_id IS NOT NULL)
+        (game_type = 'HUMAN_VS_HUMAN' AND player2_id IS NOT NULL AND ai_difficulty IS NULL) OR
+        (game_type = 'HUMAN_VS_AI' AND player2_id IS NULL AND ai_difficulty IS NOT NULL)
     ),
     CONSTRAINT winner_consistency CHECK (
         (winner_type = 'PLAYER1' AND winner_id = player1_id) OR
@@ -221,7 +176,7 @@ CREATE TABLE game (
 
 ---
 
-### 5. GAME_MOVE
+### 4. GAME_MOVE
 **Individual move history for game replay**
 
 - **Primary Key**: `move_id` (UUID)
@@ -237,7 +192,7 @@ CREATE TABLE game_move (
     player_type VARCHAR(20) NOT NULL
         CHECK (player_type IN ('HUMAN', 'AI')),
     player_id UUID REFERENCES player(player_id) ON DELETE CASCADE,  -- NULL if AI
-    ai_opponent_id UUID REFERENCES ai_opponent(ai_id) ON DELETE CASCADE,  -- NULL if human
+    ai_difficulty VARCHAR(20) CHECK (ai_difficulty IN ('EASY', 'MEDIUM', 'HARD', 'EXPERT')),
     board_x INTEGER NOT NULL CHECK (board_x >= 0 AND board_x < 15),
     board_y INTEGER NOT NULL CHECK (board_y >= 0 AND board_y < 15),
     stone_color VARCHAR(20) NOT NULL
@@ -249,8 +204,8 @@ CREATE TABLE game_move (
     UNIQUE(game_id, move_number),
     UNIQUE(game_id, board_x, board_y),
     CONSTRAINT move_player_consistency CHECK (
-        (player_type = 'HUMAN' AND player_id IS NOT NULL AND ai_opponent_id IS NULL) OR
-        (player_type = 'AI' AND player_id IS NULL AND ai_opponent_id IS NOT NULL)
+        (player_type = 'HUMAN' AND player_id IS NOT NULL AND ai_difficulty IS NULL) OR
+        (player_type = 'AI' AND player_id IS NULL AND ai_difficulty IS NOT NULL)
     )
 );
 ```
@@ -295,10 +250,6 @@ CREATE INDEX idx_player_email ON player(email);
 CREATE INDEX idx_player_active ON player(is_active);
 CREATE INDEX idx_player_account_status ON player(account_status);
 
--- AI opponent queries
-CREATE INDEX idx_ai_opponent_difficulty ON ai_opponent(difficulty_level);
-CREATE INDEX idx_ai_opponent_active ON ai_opponent(is_active);
-
 -- Player stats queries
 CREATE INDEX idx_player_stats_player_id ON player_stats(player_id);
 CREATE INDEX idx_player_stats_mmr ON player_stats(current_mmr);
@@ -308,7 +259,7 @@ CREATE INDEX idx_game_status ON game(game_status);
 CREATE INDEX idx_game_type ON game(game_type);
 CREATE INDEX idx_game_player1 ON game(player1_id);
 CREATE INDEX idx_game_player2 ON game(player2_id);
-CREATE INDEX idx_game_ai_opponent ON game(ai_opponent_id);
+CREATE INDEX idx_game_ai_difficulty ON game(ai_difficulty);
 CREATE INDEX idx_game_created_at ON game(created_at);
 CREATE INDEX idx_game_winner ON game(winner_id);
 

@@ -187,6 +187,10 @@ docker logs gomoku-redis
 docker-compose restart backend
 docker-compose restart postgres
 
+# Rebuild backend image (after code changes)
+docker-compose build --no-cache backend
+docker-compose up -d --force-recreate backend
+
 # Reset database (deletes all data)
 docker-compose down -v
 docker-compose up -d
@@ -207,24 +211,13 @@ gomoku.player
 ├── is_active
 └── account_status (ACTIVE, SUSPENDED, BANNED)
 
-gomoku.ai_opponent
-├── ai_id (UUID, PK)
-├── name
-├── difficulty_level (EASY, MEDIUM, HARD, EXPERT)
-├── model_version
-├── model_file_path
-├── win_rate_target
-├── is_active
-├── created_at
-└── last_updated
-
 gomoku.game
 ├── game_id (UUID, PK)
 ├── game_type (HUMAN_VS_HUMAN, HUMAN_VS_AI)
 ├── game_status (WAITING, IN_PROGRESS, COMPLETED, ABANDONED)
 ├── player1_id (FK → player)
 ├── player2_id (FK → player, nullable)
-├── ai_opponent_id (FK → ai_opponent, nullable)
+├── ai_difficulty (EASY, MEDIUM, HARD, EXPERT)
 ├── winner_type (NONE, PLAYER, AI, DRAW)
 ├── winner_id (FK → player, nullable)
 ├── total_moves
@@ -241,7 +234,7 @@ gomoku.game_move
 ├── move_number
 ├── player_type (HUMAN, AI)
 ├── player_id (FK → player, nullable)
-├── ai_opponent_id (FK → ai_opponent, nullable)
+├── ai_difficulty (EASY, MEDIUM, HARD, EXPERT)
 ├── board_x
 ├── board_y
 ├── stone_color (BLACK, WHITE)
