@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket PvP Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        .player { border: 2px solid #ccc; padding: 15px; margin: 10px; display: inline-block; vertical-align: top; }
+        .player1 { border-color: #333; }
+        .player2 { border-color: #666; }
+        button { margin: 5px; padding: 8px 15px; cursor: pointer; }
+        .log { background: #f5f5f5; padding: 10px; margin: 10px 0; height: 300px; overflow-y: scroll; font-size: 12px; }
+        input { padding: 5px; margin: 5px; }
+        .status { font-weight: bold; padding: 5px; margin: 5px 0; }
+        .connected { color: green; }
+        .disconnected { color: red; }
+    </style>
+</head>
+<body>
+    <h1>WebSocket PvP Test</h1>
+
+    <div>
+        <h3>Setup</h3>
+        <div>
+            <label>Player 1 Token:</label>
+            <input type="text" id="player1Token" size="100" value="eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiI0NDUyY2Y4Yi1hMTY0LTRiMzQtODdiYi00ZGVkNDM4ZGFlOTIiLCJpYXQiOjE3NjA1MDQwNjAsImV4cCI6MTc2MDU5MDQ2MH0.h0naVogY8ctVp4sDOBsyxJugIDeN1CjKi1OFqqB8RNcVGsZ8kP2PnuqtNh8fq8tUPdi1fzW6PrySEqSruPE-Iw">
+        </div>
+        <div>
+            <label>Player 2 Token:</label>
+            <input type="text" id="player2Token" size="100" value="eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJjOTcxMmRjOS05ZTgwLTRiZTgtOGRkMi1lNDFmZTMyMzI0NTgiLCJpYXQiOjE3NjA1MDQwODIsImV4cCI6MTc2MDU5MDQ4Mn0.1AkMowWr8QOxWCBNhVQ6hdrqHyeBH28mD9DnhaWHgs51uDHT7tp7zrCLFy1CHhCqEXMNvPnrnPKVSNowC7OOWw">
+        </div>
+        <div>
+            <label>Player 2 ID:</label>
+            <input type="text" id="player2Id" size="40" value="c9712dc9-9e80-4be8-8dd2-e41fe3232458">
+        </div>
+        <button onclick="createGame()">1. Create Game</button>
+        <button onclick="connectBothPlayers()">2. Connect Both Players</button>
+        <button onclick="playAutoGame()">3. Auto-Play (P2 Wins)</button>
+        <div id="gameIdDisplay" style="margin: 10px 0; font-weight: bold;"></div>
+    </div>
+
+    <div style="display: flex;">
+        <div class="player player1">
+            <h3>Player 1 (BLACK)</h3>
+            <div class="status" id="p1Status">Disconnected</div>
+            <button onclick="player1Connect()">Connect</button>
+            <button onclick="player1Disconnect()">Disconnect</button>
+            <div>
+                Row: <input type="number" id="p1Row" value="0" min="0" max="14" style="width: 60px;">
+                Col: <input type="number" id="p1Col" value="8" min="0" max="14" style="width: 60px;">
+                <button onclick="player1Move()">Send Move</button>
+            </div>
+            <div class="log" id="p1Log"></div>
+        </div>
+
+        <div class="player player2">
+            <h3>Player 2 (WHITE)</h3>
+            <div class="status" id="p2Status">Disconnected</div>
+            <button onclick="player2Connect()">Connect</button>
+            <button onclick="player2Disconnect()">Disconnect</button>
+            <div>
+                Row: <input type="number" id="p2Row" value="7" min="0" max="14" style="width: 60px;">
+                Col: <input type="number" id="p2Col" value="0" min="0" max="14" style="width: 60px;">
+                <button onclick="player2Move()">Send Move</button>
+            </div>
+            <div class="log" id="p2Log"></div>
+        </div>
+    </div>
+
+    <script>
+        let gameId = null;
+        let player1Client = null;
+        let player2Client = null;
+
+        function log(player, message) {
+            const logDiv = document.getElementById(player + 'Log');
+            const time = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${time}] ${message}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function setStatus(player, connected) {
+            const statusDiv = document.getElementById(player + 'Status');
+            if (connected) {
+                statusDiv.textContent = 'Connected';
+                statusDiv.className = 'status connected';
+            } else {
+                statusDiv.textContent = 'Disconnected';
+                statusDiv.className = 'status disconnected';
+            }
+        }
+
+        async function createGame() {
+            const p1Token = document.getElementById('player1Token').value;
+            const p2Id = document.getElementById('player2Id').value;
+
+            try {
+                const response = await fetch('http://localhost:8080/api/game/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${p1Token}`
+                    },
+                    body: JSON.stringify({
+                        gameType: 'HUMAN_VS_HUMAN',
+                        player2Id: p2Id
+                    })
+                });
+
+                const data = await response.json();
+                gameId = data.gameId;
+                document.getElementById('gameIdDisplay').textContent = `Game ID: ${gameId}`;
+                console.log('Game created:', gameId);
+                alert(`Game created: ${gameId}`);
+            } catch (error) {
+                console.error('Failed to create game:', error);
+                alert('Failed to create game: ' + error);
+            }
+        }
+
+        function player1Connect() {
+            if (!gameId) {
+                alert('Create a game first!');
+                return;
+            }
+
+            const token = document.getElementById('player1Token').value;
+            const socket = new SockJS('http://localhost:8080/ws');
+            player1Client = Stomp.over(socket);
+
+            player1Client.connect(
+                { 'Authorization': `Bearer ${token}` },
+                (frame) => {
+                    log('p1', '✅ Connected to WebSocket');
+                    setStatus('p1', true);
+
+                    // Subscribe to game topic
+                    player1Client.subscribe(`/topic/game/${gameId}`, (message) => {
+                        const gameState = JSON.parse(message.body);
+                        log('p1', `📨 Game update: status=${gameState.status}, moves=${gameState.moveCount}, currentPlayer=${gameState.currentPlayer}`);
+                        if (gameState.status === 'COMPLETED') {
+                            log('p1', `🎉 GAME OVER! Winner: ${gameState.winnerType}`);
+                        }
+                    });
+
+                    log('p1', `📡 Subscribed to /topic/game/${gameId}`);
+                },
+                (error) => {
+                    log('p1', `❌ Error: ${error}`);
+                    setStatus('p1', false);
+                }
+            );
+        }
+
+        function player2Connect() {
+            if (!gameId) {
+                alert('Create a game first!');
+                return;
+            }
+
+            const token = document.getElementById('player2Token').value;
+            const socket = new SockJS('http://localhost:8080/ws');
+            player2Client = Stomp.over(socket);
+
+            player2Client.connect(
+                { 'Authorization': `Bearer ${token}` },
+                (frame) => {
+                    log('p2', '✅ Connected to WebSocket');
+                    setStatus('p2', true);
+
+                    // Subscribe to game topic
+                    player2Client.subscribe(`/topic/game/${gameId}`, (message) => {
+                        const gameState = JSON.parse(message.body);
+                        log('p2', `📨 Game update: status=${gameState.status}, moves=${gameState.moveCount}, currentPlayer=${gameState.currentPlayer}`);
+                        if (gameState.status === 'COMPLETED') {
+                            log('p2', `🎉 GAME OVER! Winner: ${gameState.winnerType}`);
+                        }
+                    });
+
+                    log('p2', `📡 Subscribed to /topic/game/${gameId}`);
+                },
+                (error) => {
+                    log('p2', `❌ Error: ${error}`);
+                    setStatus('p2', false);
+                }
+            );
+        }
+
+        function player1Disconnect() {
+            if (player1Client) {
+                player1Client.disconnect();
+                setStatus('p1', false);
+                log('p1', 'Disconnected');
+            }
+        }
+
+        function player2Disconnect() {
+            if (player2Client) {
+                player2Client.disconnect();
+                setStatus('p2', false);
+                log('p2', 'Disconnected');
+            }
+        }
+
+        function player1Move() {
+            if (!player1Client || !player1Client.connected) {
+                alert('Player 1 not connected!');
+                return;
+            }
+
+            const row = parseInt(document.getElementById('p1Row').value);
+            const col = parseInt(document.getElementById('p1Col').value);
+
+            player1Client.send(`/app/game/${gameId}/move`, {}, JSON.stringify({ row, col }));
+            log('p1', `🎯 Sent move: (${row},${col})`);
+        }
+
+        function player2Move() {
+            if (!player2Client || !player2Client.connected) {
+                alert('Player 2 not connected!');
+                return;
+            }
+
+            const row = parseInt(document.getElementById('p2Row').value);
+            const col = parseInt(document.getElementById('p2Col').value);
+
+            player2Client.send(`/app/game/${gameId}/move`, {}, JSON.stringify({ row, col }));
+            log('p2', `🎯 Sent move: (${row},${col})`);
+        }
+
+        function connectBothPlayers() {
+            player1Connect();
+            setTimeout(() => player2Connect(), 1000);
+        }
+
+        async function playAutoGame() {
+            if (!player1Client || !player2Client) {
+                alert('Connect both players first!');
+                return;
+            }
+
+            // P1 plays random positions, P2 plays row 7 horizontally (P2 wins)
+            const moves = [
+                { player: 'p1', row: 0, col: 5 },
+                { player: 'p2', row: 7, col: 0 },
+                { player: 'p1', row: 2, col: 8 },
+                { player: 'p2', row: 7, col: 1 },
+                { player: 'p1', row: 4, col: 3 },
+                { player: 'p2', row: 7, col: 2 },
+                { player: 'p1', row: 6, col: 9 },
+                { player: 'p2', row: 7, col: 3 },
+                { player: 'p1', row: 1, col: 12 },
+                { player: 'p2', row: 7, col: 4 }  // P2 WINS with 5 in a row horizontally!
+            ];
+
+            for (let i = 0; i < moves.length; i++) {
+                await new Promise(resolve => setTimeout(resolve, 1500));
+
+                const move = moves[i];
+                const client = move.player === 'p1' ? player1Client : player2Client;
+                const playerName = move.player === 'p1' ? 'Player 1' : 'Player 2';
+
+                client.send(`/app/game/${gameId}/move`, {}, JSON.stringify({ row: move.row, col: move.col }));
+                log(move.player, `🎯 Auto-move #${i+1}: (${move.row},${move.col})`);
+                console.log(`${playerName} move ${i+1}: (${move.row},${move.col})`);
+            }
+
+            console.log('Auto-play complete! Check logs for winner.');
+        }
+    </script>
+</body>
+</html>
