@@ -76,7 +76,7 @@ Built with Spring Boot, Redis, PostgreSQL, and a Flask-based AI service, the app
          │
 ┌────────┴────────┐                  ┌─────────────────────────────────────────────┐
 │  MATCHMAKING    │                  │          Python AI Microservice             │
-│    SERVICE      │     HTTP/gRPC    │          (Same Repository)                  │
+│    SERVICE      │     HTTP/REST    │          (Same Repository)                  │
 │                 │◄────────────────►│                                             │
 │ • Redis Queue   │   AI move        │ • PyTorch model inference                   │
 │   (ZADD/ZPOP)   │   requests       │ • Multiple difficulty levels                │
@@ -89,7 +89,7 @@ Built with Spring Boot, Redis, PostgreSQL, and a Flask-based AI service, the app
 │                              COMMUNICATION PATTERNS                            │
 ├─────────────────────────────────────────────────────────────────────────────────┤
 │ PLAYER vs PLAYER: WebSocket bidirectional real-time communication              │
-│ PLAYER vs AI: Spring Boot → HTTP/gRPC → Python AI Service                      │
+│ PLAYER vs AI: Spring Boot → HTTP  → Python AI Service                          │
 │ MATCHMAKING: Redis queue (ZADD/ZPOPMIN) for FIFO player pairing                │
 │ ANALYTICS/LOGGING: Kafka event streams for all game/match events               │
 └─────────────────────────────────────────────────────────────────────────────────┘
