@@ -61,9 +61,9 @@ Built with Spring Boot, Redis, PostgreSQL, and a Flask-based AI service, the app
          │                           │                                             │
          │                           │ ┌─────────────────────────────────────────┐ │
          │                           │ │        GameMovesConsumer                │ │
-         │                           │ │  • Game replay data persistence         │ │
-         │                           │ │  • Move analytics (player & AI)         │ │
-         │                           │ │  • Anti-cheat pattern detection        │ │
+         │                           │ │  • Real-time move analytics (logs only) │ │
+         │                           │ │  • Pattern tracking (player & AI)       │ │
+         │                           │ │  • Future: Live dashboards & metrics    │ │
          │                           │ └─────────────────────────────────────────┘ │
          │                           │ ┌─────────────────────────────────────────┐ │
          │                           │ │        MatchCreatedConsumer             │ │
@@ -116,14 +116,14 @@ Built with Spring Boot, Redis, PostgreSQL, and a Flask-based AI service, the app
 ### **1. Game Creation**
 
 **PvP:**
-1. Client POST `/api/matchmaking/create-pvp` with opponent username
+1. Client POST `/api/game/create` with `gameType: HUMAN_VS_HUMAN` and `player2Id`
 2. Backend creates GameSession with unique UUID
 3. Session stored in Redis with 2-hour TTL
 4. WebSocket rooms created for both players
 
 **PvAI:**
-1. Client POST `/api/matchmaking/create-pvai` with AI opponent ID
-2. Backend creates GameSession (player2Id = null, aiOpponentId set)
+1. Client POST `/api/game/create` with `gameType: HUMAN_VS_AI` and `aiDifficulty` (e.g., "MEDIUM")
+2. Backend creates GameSession (player2Id = null, aiDifficulty set)
 3. Session stored in Redis
 
 ### **2. Move Processing (PvP)**
@@ -159,8 +159,12 @@ When win/draw/forfeit detected:
    - Serialize final board state as JSONB
    - Serialize move sequence as JSONB array `[[row, col, player], ...]`
    - Save to PostgreSQL
-3. Redis session remains available for retrieval
-4. TTL ensures cleanup after 2 hours
+3. `saveMoveHistoryToDatabase()` called:
+   - Reads moves from Redis `session.moveHistory`
+   - Persists each move to `game_move` table
+   - Includes player type, stone color, position, and AI difficulty (if applicable)
+4. Redis session remains available for retrieval
+5. TTL ensures cleanup after 2 hours
 
 **Move History Format:**
 ```json
@@ -207,10 +211,10 @@ Separate python microservice handles AI move calculations:
 ┌─────────────────────────────────────────────────────────────────┐
 │                 PERSISTENCE LAYER (PostgreSQL)                 │
 ├─────────────────────────────────────────────────────────────────┤
-│ • game table: Final state, winner, duration                    │
+│ • game table: Final state, winner, duration, ai_difficulty     │
 │ • final_board_state: JSONB snapshot of final board            │
 │ • move_sequence: JSONB array [[row,col,player],...]           │
-│ • game_move table: Reserved for future Kafka integration      │
+│ • game_move table: Move-by-move history (via saveToDatabase)  │
 │ • player_stats: Wins, losses, MMR tracking                     │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -269,10 +273,11 @@ public class GameSession {
     private GameStatus status;        // IN_PROGRESS, COMPLETED, ABANDONED
     private UUID player1Id;
     private UUID player2Id;           // null for AI games
-    private UUID aiOpponentId;        // null for PvP games
+    private String aiDifficulty;      // "EASY", "MEDIUM", "HARD", "EXPERT" (null for PvP)
     private int[][] board = new int[15][15];
     private int currentPlayer;        // 1 or 2
     private int moveCount;
+    private List<int[]> moveHistory;  // [[row, col, player], ...] for replay
     private String winnerType;        // PLAYER1, PLAYER2, AI, DRAW, NONE
     private UUID winnerId;
     private LocalDateTime startedAt;
