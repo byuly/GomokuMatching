@@ -104,6 +104,7 @@ Built with Spring Boot, Redis, PostgreSQL, and a Flask-based AI service, the app
 | **Authentication**       | JWT with Spring Security) | Token-based authentication                 |
 | **Real-Time Updates**    | Spring WebSockets (STOMP) | PvP game state broadcasting                |
 | **Active Game Cache**    | Redis                     | In-memory sessions with 2-hour TTL         |
+| **Event Streaming**      | Apache Kafka              | Asynchronous event logging and processing  |
 | **AI Opponent**          | Flask + Python            | Microservice for move calculation          |
 | **AI Communication**     | HTTP REST                 | Spring Boot → Flask                        |
 | **Database**             | PostgreSQL 15             | Player data, game history, statistics      |
