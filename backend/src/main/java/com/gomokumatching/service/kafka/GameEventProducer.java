@@ -34,7 +34,6 @@ import java.util.concurrent.CompletableFuture;
 public class GameEventProducer {
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
-
     private static final String GAME_MOVE_TOPIC = "game-move-made";
     private static final String MATCH_CREATED_TOPIC = "match-created";
 
@@ -56,12 +55,12 @@ public class GameEventProducer {
 
             future.whenComplete((result, ex) -> {
                 if (ex == null) {
-                    log.debug("✅ Published move event: game={}, move={}, partition={}",
+                    log.debug("published move event: game={}, move={}, partition={}",
                             event.getGameId(),
                             event.getMoveNumber(),
                             result.getRecordMetadata().partition());
                 } else {
-                    log.error("❌ Failed to publish move event: game={}, move={}, error={}",
+                    log.error("failed to publish move event: game={}, move={}, error={}",
                             event.getGameId(),
                             event.getMoveNumber(),
                             ex.getMessage());
@@ -69,7 +68,7 @@ public class GameEventProducer {
             });
 
         } catch (Exception e) {
-            log.error("❌ Exception publishing move event: game={}, error={}",
+            log.error("exception publishing move event: game={}, error={}",
                     event.getGameId(), e.getMessage(), e);
         }
     }
@@ -92,39 +91,21 @@ public class GameEventProducer {
 
             future.whenComplete((result, ex) -> {
                 if (ex == null) {
-                    log.info("✅ Published match-created event: game={}, type={}, source={}, partition={}",
+                    log.info("published match-created event: game={}, type={}, source={}, partition={}",
                             event.getGameId(),
                             event.getGameType(),
                             event.getMatchSource(),
                             result.getRecordMetadata().partition());
                 } else {
-                    log.error("❌ Failed to publish match-created event: game={}, error={}",
+                    log.error("failed to publish match-created event: game={}, error={}",
                             event.getGameId(),
                             ex.getMessage());
                 }
             });
 
         } catch (Exception e) {
-            log.error("❌ Exception publishing match-created event: game={}, error={}",
+            log.error("exception publishing match-created event: game={}, error={}",
                     event.getGameId(), e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Health check: verify Kafka connectivity.
-     *
-     * Can be called from actuator health endpoint or monitoring.
-     *
-     * @return true if Kafka is reachable
-     */
-    public boolean isKafkaHealthy() {
-        try {
-            // send a test message to verify connectivity
-            // would check Kafka admin client metrics
-            return true;
-        } catch (Exception e) {
-            log.error("Kafka health check failed: {}", e.getMessage());
-            return false;
         }
     }
 }

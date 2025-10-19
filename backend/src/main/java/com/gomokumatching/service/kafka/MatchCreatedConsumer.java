@@ -1,53 +1,29 @@
 package com.gomokumatching.service.kafka;
 
+import com.gomokumatching.model.GameSession;
 import com.gomokumatching.model.dto.kafka.MatchCreatedEvent;
+import com.gomokumatching.service.GameService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.messaging.handler.annotation.Payload;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
-/**
- * Kafka consumer for match-created events.
- *
- * Listens to: match-created topic
- *
- * Responsibilities:
- * - Consume MatchCreatedEvent messages
- * - Log match creation for analytics and monitoring
- * - Future: Update matchmaking metrics, player activity tracking
- *
- * Consumer Strategy:
- * - Auto-commit offsets (configured in KafkaConsumerConfig)
- * - 3 concurrent consumers (matches partition count)
- * - Non-critical path - errors logged but don't fail system
- *
- * Use Cases:
- * - Match history analytics
- * - Matchmaking performance metrics (avg wait time, success rate)
- * - Player activity tracking (matches per day, peak hours)
- * - System monitoring and alerting
- */
+import java.util.HashMap;
+import java.util.Map;
+
+// consumes match-created events from kafka streams, creates game session, sends websocket notifications
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class MatchCreatedConsumer {
 
-    /**
-     * Consume match-created events for analytics.
-     *
-     * Currently logs events for monitoring. Future enhancements:
-     * - Calculate matchmaking metrics (wait time, success rate)
-     * - Track player activity patterns
-     * - Trigger notifications or webhooks
-     * - Feed data to analytics dashboard
-     *
-     * @param event MatchCreatedEvent from Kafka
-     * @param partition Kafka partition number
-     * @param offset Kafka offset
-     */
+    private final GameService gameService;
+    private final SimpMessagingTemplate messagingTemplate;
+
     @KafkaListener(
             topics = "match-created",
             groupId = "${spring.kafka.consumer.group-id}",
@@ -59,7 +35,7 @@ public class MatchCreatedConsumer {
             @Header(KafkaHeaders.OFFSET) long offset
     ) {
         try {
-            log.info("📊 Match created event: game={}, type={}, source={}, players={}/{}, partition={}, offset={}",
+            log.info("match created event: game={}, type={}, source={}, players={}/{}, partition={}, offset={}",
                     event.getGameId(),
                     event.getGameType(),
                     event.getMatchSource(),
@@ -68,28 +44,74 @@ public class MatchCreatedConsumer {
                     partition,
                     offset);
 
-            // TODO: Persist to match_analytics table
-            // TODO: Update matchmaking metrics
-            // future: Trigger notifications (Discord, Slack, etc.)
+            if ("MATCHMAKING".equals(event.getMatchSource())) {
+                processMatchmakingMatch(event);
+            }
 
         } catch (Exception e) {
-            // analytics failures shouldn't disrupt system
-            log.error("❌ Failed to process match-created event: game={}, error={}",
+            log.error("failed to process match-created event: game={}, error={}",
                     event.getGameId(), e.getMessage(), e);
         }
     }
 
-    /**
-     * Calculate matchmaking statistics.
-     *
-     * Future implementation:
-     * - Average wait time per player
-     * - Match success rate (matched vs timed out)
-     * - Peak matchmaking hours
-     * - Player retention metrics
-     */
-    private void updateMatchmakingMetrics(MatchCreatedEvent event) {
-        // TODO: Implement when analytics tables are created
-        log.debug("Matchmaking metrics update placeholder for game {}", event.getGameId());
+    private void processMatchmakingMatch(MatchCreatedEvent event) {
+        try {
+            GameSession session = gameService.createPvPGame(
+                    event.getPlayer1Id(),
+                    event.getPlayer2Id()
+            );
+
+            log.info("game session created for match: gameId={}, player1={}, player2={}",
+                    session.getGameId(),
+                    event.getPlayer1Id(),
+                    event.getPlayer2Id());
+
+            notifyPlayersOfMatch(session);
+
+        } catch (Exception e) {
+            log.error("failed to create game for match event: game={}, error={}",
+                    event.getGameId(), e.getMessage(), e);
+        }
+    }
+
+    // send websocket notifications to both players at /user/{userId}/queue/match-found
+    private void notifyPlayersOfMatch(GameSession session) {
+        try {
+            Map<String, Object> matchNotification = new HashMap<>();
+            matchNotification.put("gameId", session.getGameId());
+            matchNotification.put("gameType", "HUMAN_VS_HUMAN");
+            matchNotification.put("opponentId", null);
+            matchNotification.put("websocketTopic", "/topic/game/" + session.getGameId());
+            matchNotification.put("message", "Match found! Your opponent is ready.");
+
+            Map<String, Object> player1Notification = new HashMap<>(matchNotification);
+            player1Notification.put("opponentId", session.getPlayer2Id());
+            player1Notification.put("yourPlayerNumber", 1);
+            player1Notification.put("yourColor", "BLACK");
+
+            messagingTemplate.convertAndSendToUser(
+                    session.getPlayer1Id().toString(),
+                    "/queue/match-found",
+                    player1Notification
+            );
+
+            Map<String, Object> player2Notification = new HashMap<>(matchNotification);
+            player2Notification.put("opponentId", session.getPlayer1Id());
+            player2Notification.put("yourPlayerNumber", 2);
+            player2Notification.put("yourColor", "WHITE");
+
+            messagingTemplate.convertAndSendToUser(
+                    session.getPlayer2Id().toString(),
+                    "/queue/match-found",
+                    player2Notification
+            );
+
+            log.info("websocket notifications sent to players {} and {}",
+                    session.getPlayer1Id(), session.getPlayer2Id());
+
+        } catch (Exception e) {
+            log.error("failed to send match notifications for game {}: {}",
+                    session.getGameId(), e.getMessage(), e);
+        }
     }
 }

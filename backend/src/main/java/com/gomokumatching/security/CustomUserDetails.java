@@ -63,6 +63,16 @@ public class CustomUserDetails implements UserDetails {
 
     @Override
     public String getUsername() {
+        // return UUID as string for WebSocket user routing
+        // spring's convertAndSendToUser() uses Principal.getName() which calls this method
+        return id.toString();
+    }
+
+    /**
+     * Get the actual username (not UUID).
+     * Use this when you need the display username.
+     */
+    public String getActualUsername() {
         return username;
     }
 

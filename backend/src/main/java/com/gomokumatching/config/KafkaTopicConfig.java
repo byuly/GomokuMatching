@@ -74,6 +74,24 @@ public class KafkaTopicConfig {
     }
 
     /**
+     * Topic: matchmaking-queue-events
+     *
+     * Contains all matchmaking queue operations (join, leave, timeout).
+     * Used by Kafka Streams for real-time player matching.
+     *
+     * Event-driven matchmaking replaces the old polling-based scheduler.
+     */
+    @Bean
+    public NewTopic matchmakingQueueEventsTopic() {
+        return TopicBuilder.name("matchmaking-queue-events")
+                .partitions(3)
+                .replicas(1)
+                .config("retention.ms", "604800000") // 7 days
+                .config("cleanup.policy", "delete")
+                .build();
+    }
+
+    /**
      * Dead Letter Queue topic for failed event processing.
      *
      * Events that fail processing after retries are sent here for manual inspection.
