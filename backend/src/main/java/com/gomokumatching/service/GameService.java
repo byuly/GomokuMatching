@@ -1,14 +1,11 @@
 package com.gomokumatching.service;
 
 import com.gomokumatching.model.Game;
-import com.gomokumatching.model.GameMove;
 import com.gomokumatching.model.GameSession;
 import com.gomokumatching.model.Player;
 import com.gomokumatching.model.dto.kafka.GameMoveEvent;
 import com.gomokumatching.model.enums.GameStatusEnum;
 import com.gomokumatching.model.enums.GameTypeEnum;
-import com.gomokumatching.model.enums.PlayerTypeEnum;
-import com.gomokumatching.model.enums.StoneColorEnum;
 import com.gomokumatching.model.enums.WinnerTypeEnum;
 import com.gomokumatching.repository.GameMoveRepository;
 import com.gomokumatching.repository.GameRepository;
@@ -342,6 +339,16 @@ public class GameService {
     /**
      * Save completed game session from Redis to PostgreSQL for permanent storage.
      * Converts in-memory GameSession to database Game entity.
+     *
+     * Dual Storage Architecture:
+     * 1. game.move_sequence (JSONB): Full move history saved here synchronously (from Redis)
+     *    - Fast replay functionality
+     *    - Denormalized for quick access
+     *
+     * 2. game_move table: Individual move rows saved asynchronously via Kafka
+     *    - GameMovesConsumer persists moves as they happen during gameplay
+     *    - Enables detailed move analysis and querying
+     *    - Event-driven architecture (decoupled from game logic)
      */
     private void saveCompletedGameToDatabase(GameSession session) {
         try {
@@ -418,120 +425,11 @@ public class GameService {
             log.info("✅ Game {} saved to PostgreSQL: {} winner in {} moves",
                     session.getGameId(), winnerTypeStr, session.getMoveCount());
 
-            // Persist move history from Redis to database
-            saveMoveHistoryToDatabase(game, session);
+            // NOTE: Individual moves are persisted asynchronously via Kafka consumer (GameMovesConsumer)
+            // as they happen during gameplay. No need for batch save here.
 
         } catch (Exception e) {
             log.error("❌ Failed to save game {} to PostgreSQL: {}", session.getGameId(), e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Save move history from GameSession to database.
-     *
-     * This method is called when a game completes to persist all moves from the
-     * in-memory GameSession to the game_move table for replay functionality.
-     *
-     * Works in conjunction with Kafka GameMovesConsumer:
-     * - Kafka consumer provides real-time move persistence (if game already in DB)
-     * - This method ensures all moves are persisted when game completes
-     * - Handles duplicates gracefully via unique constraints
-     *
-     * @param game The saved Game entity (must exist in database)
-     * @param session The GameSession from Redis with move history
-     */
-    private void saveMoveHistoryToDatabase(Game game, GameSession session) {
-        if (session.getMoveHistory() == null || session.getMoveHistory().isEmpty()) {
-            log.debug("No move history to persist for game {}", session.getGameId());
-            return;
-        }
-
-        try {
-            int moveNumber = 1; // Move numbers start at 1
-            for (int[] move : session.getMoveHistory()) {
-                try {
-                    // Parse move array: [row, col, playerNumber]
-                    int row = move[0];
-                    int col = move[1];
-                    int playerNumber = move[2];
-
-                    // Check if move already exists (Kafka consumer may have saved it)
-                    GameMove existingMove = gameMoveRepository.findByGameIdAndMoveNumber(
-                            session.getGameId(),
-                            moveNumber
-                    );
-
-                    if (existingMove != null) {
-                        log.debug("Move {} already persisted for game {} (via Kafka), skipping",
-                                moveNumber, session.getGameId());
-                        moveNumber++;
-                        continue;
-                    }
-
-                    // Create new GameMove entity
-                    GameMove gameMove = new GameMove();
-                    gameMove.setGame(game);
-                    gameMove.setMoveNumber(moveNumber);
-                    gameMove.setBoardX(row);
-                    gameMove.setBoardY(col);
-
-                    // Determine player type and set player reference
-                    // Player 1 is always human, Player 2 could be human or AI
-                    final UUID playerId;
-                    if (playerNumber == 1) {
-                        playerId = session.getPlayer1Id();
-                    } else if (playerNumber == 2 && session.getPlayer2Id() != null) {
-                        playerId = session.getPlayer2Id();
-                    } else {
-                        playerId = null;
-                    }
-
-                    if (playerId != null) {
-                        // Human player move
-                        gameMove.setPlayerType(PlayerTypeEnum.HUMAN);
-                        Player player = playerRepository.findById(playerId)
-                                .orElseThrow(() -> new IllegalStateException(
-                                        "Player not found: " + playerId));
-                        gameMove.setPlayer(player);
-                        gameMove.setAiDifficulty(null);
-                    } else {
-                        // AI move (player 2 in AI game)
-                        gameMove.setPlayerType(PlayerTypeEnum.AI);
-                        gameMove.setPlayer(null);
-                        gameMove.setAiDifficulty(session.getAiDifficulty());
-                    }
-
-                    // Set stone color (player 1 = BLACK, player 2 = WHITE)
-                    gameMove.setStoneColor(playerNumber == 1
-                            ? StoneColorEnum.BLACK
-                            : StoneColorEnum.WHITE);
-
-                    // Store board state after move as JSON (we don't track this in moveHistory)
-                    // For now, set to null - could reconstruct if needed
-                    gameMove.setBoardStateAfterMove(null);
-
-                    // Time taken is not tracked in current implementation
-                    gameMove.setTimeTakenMs(null);
-
-                    gameMoveRepository.save(gameMove);
-
-                    moveNumber++;
-
-                } catch (Exception e) {
-                    // Log but continue with other moves - duplicates will fail unique constraint
-                    log.warn("Failed to save move {} for game {}: {}",
-                            moveNumber, session.getGameId(), e.getMessage());
-                    moveNumber++;
-                }
-            }
-
-            log.info("✅ Persisted {} moves from move history for game {}",
-                    session.getMoveHistory().size(), session.getGameId());
-
-        } catch (Exception e) {
-            // Don't throw - move persistence failure shouldn't break game completion
-            log.error("❌ Failed to save move history for game {}: {}",
-                    session.getGameId(), e.getMessage(), e);
         }
     }
 
