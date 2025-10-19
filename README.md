@@ -38,59 +38,70 @@ Built with Spring Boot, Redis, PostgreSQL, and a Flask-based AI service, the app
                                      │           └─────────────────┘             │
 ┌─────────────────┐                  │                   │                       │
 │   Redis Cache   │◄─────────────────┤                   │                       │
-│                 │  Active Games &  │                   │                       │
-│ • GameSessions  │  Matchmaking     └───────────────────┼───────────────────────┘
+│                 │  Active Games    │                   │                       │
+│ • GameSessions  │                  └───────────────────┼───────────────────────┘
 │ • int[][] board │                                      ▼
-│ • Queue (FIFO)  │                  ┌─────────────────────────────────────────────┐
-│ • TTL: 2 hours  │                  │              APACHE KAFKA CLUSTER           │
-└─────────────────┘                  │ ┌─────────────────────────────────────────┐ │
-         ▲                           │ │           TOPIC: game-move-made         │ │
+│ • TTL: 2 hours  │                  ┌─────────────────────────────────────────────┐
+└─────────────────┘                  │              APACHE KAFKA CLUSTER           │
+         ▲                           │ ┌─────────────────────────────────────────┐ │
+         │                           │ │    TOPIC: matchmaking-queue-events      │ │
+         │                           │ │ Event-driven matchmaking (Kafka Streams)│ │
+         │                           │ │ Queue state in RocksDB (fault-tolerant) │ │
+         │                           │ └─────────────────────────────────────────┘ │
+         │                           │ ┌─────────────────────────────────────────┐ │
+         │                           │ │           TOPIC: game-move-made         │ │
          │                           │ │ Event log of ALL moves (player & AI)   │ │
          │                           │ │ Used for: game replay, analytics       │ │
          │                           │ └─────────────────────────────────────────┘ │
          │                           │ ┌─────────────────────────────────────────┐ │
          │                           │ │           TOPIC: match-created          │ │
-         │                           │ │ Event log when matches are formed      │ │
-         │                           │ │ Used for: match history, analytics     │ │
+         │                           │ │ Published by Kafka Streams processor   │ │
+         │                           │ │ Triggers game session creation         │ │
          │                           │ └─────────────────────────────────────────┘ │
          │                           └─────────────────────────────────────────────┘
          │                                               │
          │                                               ▼
          │                           ┌─────────────────────────────────────────────┐
-         │                           │            KAFKA CONSUMER SERVICES          │
+         │                           │     KAFKA STREAMS & CONSUMER SERVICES       │
          │                           │                                             │
+         │                           │ ┌─────────────────────────────────────────┐ │
+         │                           │ │   MatchmakingStreamsProcessor           │ │
+         │                           │ │  • Stateful queue aggregation (RocksDB) │ │
+         │                           │ │  • Real-time matching                   │ │
+         │                           │ │  • Creates matches when >=2 players     │ │
+         │                           │ └─────────────────────────────────────────┘ │
+         │                           │ ┌─────────────────────────────────────────┐ │
+         │                           │ │   MatchCreatedConsumer                  | │
+         │                           │ │  • Creates game session in Redis        │ │
+         │                           │ │  • Sends WebSocket match notifications  │ │
+         │                           │ │  • Players notified at /queue/match-found│ │
+         │                           │ └─────────────────────────────────────────┘ │
          │                           │ ┌─────────────────────────────────────────┐ │
          │                           │ │        GameMovesConsumer                │ │
          │                           │ │  • Real-time move analytics (logs only) │ │
          │                           │ │  • Pattern tracking (player & AI)       │ │
          │                           │ │  • Future: Live dashboards & metrics    │ │
          │                           │ └─────────────────────────────────────────┘ │
-         │                           │ ┌─────────────────────────────────────────┐ │
-         │                           │ │        MatchCreatedConsumer             │ │
-         │                           │ │  • Match history persistence            │ │
-         │                           │ │  • Player statistics updates            │ │
-         │                           │ │  • Match analytics                      │ │
-         │                           │ └─────────────────────────────────────────┘ │
          │                           └─────────────────────────────────────────────┘
          │
          │
 ┌────────┴────────┐                  ┌─────────────────────────────────────────────┐
 │  MATCHMAKING    │                  │          Python AI Microservice             │
-│    SERVICE      │     HTTP/REST    │          (Same Repository)                  │
+│   (Kafka-based) │     HTTP/REST    │          (Same Repository)                  │
 │                 │◄────────────────►│                                             │
-│ • Redis Queue   │   AI move        │ • PyTorch model inference                   │
-│   (ZADD/ZPOP)   │   requests       │ • Multiple difficulty levels                │
-│ • FIFO pairing  │                  │ • Board evaluation engine                   │
-│ • MMR-based     │                  │ • Minimax with neural net evaluation        │
-│ • Room creation │                  │ • Dockerized alongside Spring Boot          │
+│ • Event-driven  │   AI move        │ • PyTorch model inference                   │
+│ • Kafka Streams │   requests       │ • Multiple difficulty levels                │
+│ • RocksDB state │                  │ • Board evaluation engine                   │
+│ • <100ms match  │                  │ • Minimax with neural net evaluation        │
+│ • Fault-tolerant│                  │ • Dockerized alongside Spring Boot          │
 └─────────────────┘                  └─────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                              COMMUNICATION PATTERNS                            │
 ├─────────────────────────────────────────────────────────────────────────────────┤
 │ PLAYER vs PLAYER: WebSocket bidirectional real-time communication              │
-│ PLAYER vs AI: Spring Boot → HTTP  → Python AI Service                          │
-│ MATCHMAKING: Redis queue (ZADD/ZPOPMIN) for FIFO player pairing                │
+│ PLAYER vs AI: Spring Boot → HTTP → Python AI Service                           │
+│ MATCHMAKING: Event-driven Kafka Streams (< 100ms real-time matching)           │
 │ ANALYTICS/LOGGING: Kafka event streams for all game/match events               │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -233,20 +244,15 @@ Separate python microservice handles AI move calculations:
 │  ├─ game:session:uuid-2 → GameSession object        │
 │  └─ game:session:uuid-3 → GameSession object        │
 │                                                      │
-│  SORTED SET (Matchmaking Queue)                      │
-│  └─ matchmaking:queue                                │
-│      ├─ Score: 1697720400000, Member: player-a      │
-│      ├─ Score: 1697720405000, Member: player-b      │
-│      └─ Score: 1697720410000, Member: player-c      │
-│                                                      │
-│  (Future) STRING (Token Blacklist)                   │
+│  (need to implement with cheat detec) STRING (Token Blacklist)│
 │  ├─ blacklist:token:abc123 → "revoked"             │
 │  └─ blacklist:token:def456 → "revoked"             │
 │                                                      │
 └──────────────────────────────────────────────────────┘
 ```
 
-- single Redis instance handles both game sessions and matchmaking queue using different data structures.
+- Redis instance handles active game sessions with 2-hour TTL.
+- Matchmaking queue migrated Kafka Streams (RocksDB state store).
 
 ## data flow overview~
 

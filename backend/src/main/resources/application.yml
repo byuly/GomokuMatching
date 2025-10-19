@@ -39,13 +39,24 @@ spring:
   # KAFKA CONFIGURATION
   # ===================================
   kafka:
-    bootstrap-servers: kafka:9092
+    bootstrap-servers: localhost:9092
     consumer:
       group-id: gomoku-app
       auto-offset-reset: earliest
+      properties:
+        spring.json.trusted.packages: com.gomokumatching.model.dto.kafka
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    # Kafka Streams configuration for event-driven matchmaking
+    streams:
+      application-id: matchmaking-streams
+      state-dir: /tmp/kafka-streams/matchmaking
+      properties:
+        processing.guarantee: at_least_once
+        commit.interval.ms: 1000
+        num.stream.threads: 2
+        cache.max.bytes.buffering: 10485760  # 10MB
 
 # ===================================
 # JWT CONFIGURATION (Development Settings)
@@ -68,16 +79,14 @@ ai:
     url: http://localhost:8000
 
 # ===================================
-# MATCHMAKING CONFIGURATION
+# MATCHMAKING CONFIGURATION (Event-Driven with Kafka Streams)
 # ===================================
+# NOTE: Matchmaking is now event-driven via Kafka Streams
+# No polling scheduler needed - matches created instantly when >=2 players join
 matchmaking:
-  scheduler:
-    enabled: true
-    poll-interval-ms: 2000  # Poll queue every 2 seconds
-    initial-delay-ms: 5000  # Wait 5 seconds after startup before first run
   queue:
     max-wait-time-seconds: 300  # 5 minutes max wait (for future timeout feature)
-    estimated-match-time-seconds: 5  # Average time to form a match
+    estimated-match-time-seconds: 1  # Near-instant matching with event-driven approach
 
 # ===================================
 # LOGGING CONFIGURATION
