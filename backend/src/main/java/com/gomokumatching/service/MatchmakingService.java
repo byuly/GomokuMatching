@@ -35,6 +35,8 @@ public class MatchmakingService {
 
     public MatchmakingQueueResponse joinQueue(UUID playerId) {
         validatePlayerExists(playerId);
+        // TODO: Add duplicate queue detection - check if player is already in queue
+        // and return ALREADY_IN_QUEUE status instead of silently ignoring at Kafka Streams level
         queueEventProducer.publishPlayerJoined(playerId);
 
         log.info("Player {} joined matchmaking queue", playerId);
